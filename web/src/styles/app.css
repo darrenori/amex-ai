@@ -461,6 +461,7 @@
   transition: transform var(--duration-base) var(--easing);
 }
 
+.trip-toggle .expand svg { width: 20px; height: 20px; display: block; }
 .trip-toggle[aria-expanded="true"] .expand { transform: rotate(180deg); }
 
 .trip-panel {

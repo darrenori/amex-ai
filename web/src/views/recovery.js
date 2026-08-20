@@ -43,13 +43,13 @@ function pathCard(plan, recommended, currency) {
 
   return `
     <article class="card path-card${recommended ? ' is-recommended' : ''}" data-plan-card="${escapeHtml(plan.id)}">
+      ${recommended ? '<p><span class="badge-rec">Recommended</span></p>' : ''}
       <div class="path-head">
         <span class="icon-badge" aria-hidden="true">${icons.plane}</span>
-        <div>
+        <div style="min-width:0">
           <p class="path-name">${escapeHtml(plan.name)}</p>
           <span class="path-tag">${escapeHtml(plan.tag)}</span>
         </div>
-        ${recommended ? '<span class="badge-rec" style="margin-left:auto">Recommended</span>' : ''}
       </div>
 
       <div class="path-line">
