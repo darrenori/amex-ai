@@ -229,12 +229,22 @@ PLANS: List[Dict[str, Any]] = [
         "journey": [
             {"icon": "plane", "tone": "accent", "label": "Step 1 · Rebooking", "title": "SQ632 confirmed",
              "detail": "Business class · direct · departs 22:10, arrives 4 hours later than planned."},
-            {"icon": "star", "tone": "good", "label": "Step 2 · Short wait", "title": "Centurion Lounge, Terminal 3",
-             "detail": "4 minute walk · priority access, open now.", "included": "Included with your Card"},
+            {"icon": "star", "tone": "good", "label": "Step 2 · Short wait", "title": "SATS Premier Lounge, Terminal 3",
+             "detail": "After departure immigration · access, hours and capacity are subject to current lounge terms.",
+             "included": "Eligible Platinum Card lounge access",
+             "links": [
+                 {"label": "View Terminal 3 lounge access", "url": "https://www.americanexpress.com/en-sg/travel/lounges/the-platinum-card/SIN/sats-premier-lounge-terminal3-RL47nYNPjn/"},
+             ]},
             {"icon": "bed", "tone": "good", "label": "Step 3 · Tokyo hotel", "title": "On track",
-             "detail": "Late check-in noted with the property — no action needed."},
+             "detail": "Late check-in noted with the property — no action needed.",
+             "links": [
+                 {"label": "Explore Amex hotels in Tokyo", "url": "https://www.americanexpress.com/en-sg/travel/discover/property-results/c/27/dt/4/d/Tokyo"},
+             ]},
             {"icon": "car", "tone": "good", "label": "Step 4 · Car rental", "title": "On track",
-             "detail": "Narita pickup tomorrow 09:00, unaffected."},
+             "detail": "Narita pickup tomorrow 09:00, unaffected.",
+             "links": [
+                 {"label": "View Amex Travel car hire", "url": "https://www.americanexpress.com/en-sg/travel/cars/"},
+             ]},
         ],
     },
     {
@@ -270,16 +280,31 @@ PLANS: List[Dict[str, Any]] = [
         "journey": [
             {"icon": "plane", "tone": "accent", "label": "Step 1 · Rebooking", "title": "JL712 confirmed",
              "detail": "Business class · 1 stop via Hong Kong · departs 08:10, arrives 13 hours later than planned."},
-            {"icon": "bed", "tone": "accent", "label": "Step 2 · Tonight", "title": "Changi transit hotel",
-             "detail": "12 minute walk · overnight block available now.", "included": "Charge to your Card, no new setup"},
+            {"icon": "bed", "tone": "accent", "label": "Step 2 · Tonight", "title": "Changi transit hotel options",
+             "detail": "Browse eligible hotel partners and search current Singapore room availability.",
+             "included": "Charge an eligible booking to your Card",
+             "links": [
+                 {"label": "Browse Love Dining hotel partners", "url": "https://www.americanexpress.com/sg/benefits/love-dining/love-dining-hotels.html"},
+                 {"label": "Search Amex Travel hotels", "url": "https://www.americanexpress.com/en-sg/travel/hotels/"},
+             ]},
             {"icon": "car", "tone": "accent", "label": "Step 3 · Getting there", "title": "Terminal shuttle",
              "detail": "Direct to the transit hotel, every 15 minutes.", "included": "Included with your Card"},
-            {"icon": "cup", "tone": "accent", "label": "Step 4 · Evening meal", "title": "Gate-side restaurant",
-             "detail": "2 minute walk · open now, seating available.", "included": "Included with your Card"},
+            {"icon": "cup", "tone": "accent", "label": "Step 4 · Evening meal", "title": "Amex partner dining options",
+             "detail": "Browse current Singapore partners; confirm location, reservations and opening hours.",
+             "included": "Eligible Card dining privileges may apply",
+             "links": [
+                 {"label": "Browse Love Dining restaurants", "url": "https://www.americanexpress.com/sg/benefits/love-dining/love-restaurants.html"},
+             ]},
             {"icon": "bed", "tone": "warn", "label": "Step 5 · Tokyo hotel", "title": f"Partial loss — {CURRENCY} 300",
-             "detail": "First night forfeited; the booking is moved to tomorrow's check-in."},
+             "detail": "First night forfeited; the booking is moved to tomorrow's check-in.",
+             "links": [
+                 {"label": "Explore Amex hotels in Tokyo", "url": "https://www.americanexpress.com/en-sg/travel/discover/property-results/c/27/dt/4/d/Tokyo"},
+             ]},
             {"icon": "car", "tone": "warn", "label": "Step 6 · Car rental", "title": "Rescheduled, no fee",
-             "detail": "Pickup pushed to match the new arrival time."},
+             "detail": "Pickup pushed to match the new arrival time.",
+             "links": [
+                 {"label": "View Amex Travel car hire", "url": "https://www.americanexpress.com/en-sg/travel/cars/"},
+             ]},
         ],
     },
     {
@@ -316,14 +341,29 @@ PLANS: List[Dict[str, Any]] = [
         "journey": [
             {"icon": "plane", "tone": "accent", "label": "Step 1 · Rebooking", "title": "NH860 confirmed",
              "detail": "Business class · direct · departs in 2 days at 06:55, arrives 48 hours later than planned."},
-            {"icon": "bed", "tone": "accent", "label": "Step 2 · Extended wait", "title": "Airport-area hotel, 2 nights",
-             "detail": "8 minute walk · booked for the full wait.", "included": "Charge to your Card, no new setup"},
+            {"icon": "bed", "tone": "accent", "label": "Step 2 · Extended wait", "title": "Airport-area hotel options, 2 nights",
+             "detail": "Browse eligible hotel partners and search current Singapore room availability.",
+             "included": "Charge an eligible booking to your Card",
+             "links": [
+                 {"label": "Browse Love Dining hotel partners", "url": "https://www.americanexpress.com/sg/benefits/love-dining/love-dining-hotels.html"},
+                 {"label": "Search Amex Travel hotels", "url": "https://www.americanexpress.com/en-sg/travel/hotels/"},
+             ]},
             {"icon": "cup", "tone": "accent", "label": "Step 3 · Meals", "title": "Nearby dining, both days",
-             "detail": "Suggestions refresh daily near your hotel.", "included": "Included with your Card"},
+             "detail": "Browse current Singapore partners near your selected hotel.",
+             "included": "Eligible Card dining privileges may apply",
+             "links": [
+                 {"label": "Browse Love Dining restaurants", "url": "https://www.americanexpress.com/sg/benefits/love-dining/love-restaurants.html"},
+             ]},
             {"icon": "bed", "tone": "critical", "label": "Step 4 · Tokyo hotel", "title": f"Forfeited — {CURRENCY} 600",
-             "detail": "Both nights lost; no longer usable for this trip."},
+             "detail": "Both nights lost; no longer usable for this trip.",
+             "links": [
+                 {"label": "Explore Amex hotels in Tokyo", "url": "https://www.americanexpress.com/en-sg/travel/discover/property-results/c/27/dt/4/d/Tokyo"},
+             ]},
             {"icon": "car", "tone": "warn", "label": "Step 5 · Car rental", "title": f"Rebooked — {CURRENCY} 120 fee",
-             "detail": "New booking made at another Narita counter."},
+             "detail": "New booking made at another Narita counter.",
+             "links": [
+                 {"label": "View Amex Travel car hire", "url": "https://www.americanexpress.com/en-sg/travel/cars/"},
+             ]},
         ],
     },
 ]
