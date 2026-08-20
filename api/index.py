@@ -23,6 +23,8 @@ or claim is real.
 from __future__ import annotations
 
 import secrets
+from copy import deepcopy
+from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
 
 from fastapi import FastAPI, HTTPException
@@ -116,6 +118,9 @@ TRANSACTIONS = [
 # system price a disruption against the whole journey instead of just the flight.
 TRIP = {
     "id": "TRP-2026-0912-SIN-NRT",
+    "legacy_id": "TRIP-001",
+    "customer_id": "MEMBER-001",
+    "status": "confirmed",
     "origin": {"code": "SIN", "city": "Singapore", "airport": "Singapore Changi"},
     "destination": {"code": "NRT", "city": "Tokyo", "airport": "Tokyo Narita"},
     "dates": "12–17 September 2026",
@@ -131,9 +136,9 @@ TRIP = {
             "title": "SQ638 · 18:05",
             "detail": "Singapore Changi → Tokyo Narita · direct · 7 hours",
             "amount": 3200,
-            "status": "cancelled",
-            "status_label": "Cancelled",
-            "note": "Cancelled 3 hours before departure — mechanical.",
+            "status": "on_track",
+            "status_label": "Confirmed",
+            "note": "On schedule for departure.",
         },
         {
             "id": "hotel",
@@ -142,9 +147,9 @@ TRIP = {
             "title": "Tokyo Bay Grand Hotel",
             "detail": f"Check-in 12 Sep · 5 nights at {CURRENCY} 300 · first night non-refundable",
             "amount": 1500,
-            "status": "at_risk",
-            "status_label": "At risk",
-            "note": "The first night is forfeited if arrival slips past tonight.",
+            "status": "on_track",
+            "status_label": "Confirmed",
+            "note": "Ready for check-in tonight.",
         },
         {
             "id": "car",
@@ -185,6 +190,9 @@ DISRUPTION = {
     "emergency_hold_minutes": 90,
 }
 
+TRIP_STATE = {"status": "confirmed", "selected_plan_id": None, "last_disruption": None}
+AUDIT_LOGS: List[Dict[str, Any]] = []
+
 # fare_delta / hotel_impact / car_impact are all signed against the confirmed trip.
 # Negative means the Card Member keeps money; positive means the trip costs more.
 PLANS: List[Dict[str, Any]] = [
@@ -201,6 +209,13 @@ PLANS: List[Dict[str, Any]] = [
         "schedule": "Departs 22:10 · arrives 06:10 tomorrow",
         "arrival": "06:10 tomorrow",
         "hours_lost": 4,
+        "reliability_risk": 0.12,
+        "seat_available": True,
+        "route_valid": True,
+        "connection_valid": True,
+        "arrival_too_late": False,
+        "data_stale": False,
+        "cabin_downgrade": False,
         "fare_delta": 180,
         "hotel_impact": 0,
         "car_impact": 0,
@@ -235,6 +250,13 @@ PLANS: List[Dict[str, Any]] = [
         "schedule": "Departs 08:10 tomorrow · arrives 19:40",
         "arrival": "19:40 tomorrow",
         "hours_lost": 13,
+        "reliability_risk": 0.28,
+        "seat_available": True,
+        "route_valid": True,
+        "connection_valid": True,
+        "arrival_too_late": False,
+        "data_stale": False,
+        "cabin_downgrade": False,
         "fare_delta": -400,
         "hotel_impact": 300,
         "car_impact": 0,
@@ -273,6 +295,13 @@ PLANS: List[Dict[str, Any]] = [
         "schedule": "Departs in 2 days, 06:55 · arrives 15:05",
         "arrival": "15:05 in two days",
         "hours_lost": 48,
+        "reliability_risk": 0.18,
+        "seat_available": True,
+        "route_valid": True,
+        "connection_valid": True,
+        "arrival_too_late": False,
+        "data_stale": False,
+        "cabin_downgrade": False,
         "fare_delta": -1150,
         "hotel_impact": 600,
         "car_impact": 120,
@@ -307,6 +336,12 @@ PROFILES: List[Dict[str, Any]] = [
         "name": "Time-sensitive",
         "description": "pays a premium to save hours",
         "weight": 45,
+        "time_sensitivity": 0.90,
+        "cost_sensitivity": 0.20,
+        "direct_flight_preference": 0.85,
+        "cabin_preference": 0.90,
+        "airline_loyalty": 0.70,
+        "risk_tolerance": 0.25,
         "icon": "clock",
         "history": [
             {"when": "6 weeks ago", "text": f"Paid {CURRENCY} 130 more for a direct flight instead of a cheaper option with a 5-hour-longer layover."},
@@ -318,6 +353,12 @@ PROFILES: List[Dict[str, Any]] = [
         "name": "Balanced",
         "description": "weighs cost and time evenly",
         "weight": 25,
+        "time_sensitivity": 0.55,
+        "cost_sensitivity": 0.55,
+        "direct_flight_preference": 0.50,
+        "cabin_preference": 0.75,
+        "airline_loyalty": 0.45,
+        "risk_tolerance": 0.50,
         "icon": "scale",
         "history": [
             {"when": "2 months ago", "text": f"Chose a flight 2 hours longer to save {CURRENCY} 90 on the fare."},
@@ -329,6 +370,12 @@ PROFILES: List[Dict[str, Any]] = [
         "name": "Cost-sensitive",
         "description": "waits longer to save money",
         "weight": 8,
+        "time_sensitivity": 0.20,
+        "cost_sensitivity": 0.90,
+        "direct_flight_preference": 0.25,
+        "cabin_preference": 0.55,
+        "airline_loyalty": 0.25,
+        "risk_tolerance": 0.75,
         "icon": "coin",
         "history": [
             {"when": "1 month ago", "text": f"Chose an itinerary 8 hours longer to save {CURRENCY} 150 on the fare."},
@@ -345,9 +392,137 @@ PLANS_BY_ID = {plan["id"]: plan for plan in PLANS}
 # Scoring
 # ---------------------------------------------------------------------------
 
+def canonical_trip_id(trip_id: str) -> str:
+    if trip_id in {TRIP["id"], TRIP["legacy_id"]}:
+        return TRIP["id"]
+    raise HTTPException(status_code=404, detail=f"Unknown trip '{trip_id}'")
+
+
+def current_trip() -> Dict[str, Any]:
+    """Return the demo trip with stateful disruption/recovery status applied."""
+    trip = deepcopy(TRIP)
+    trip["status"] = TRIP_STATE["status"]
+
+    component_by_id = {component["id"]: component for component in trip["components"]}
+    flight = component_by_id["flight"]
+    hotel = component_by_id["hotel"]
+    car = component_by_id["car"]
+
+    if TRIP_STATE["status"] == "disrupted":
+        flight.update(
+            status="cancelled",
+            status_label="Cancelled",
+            note="Cancelled 3 hours before departure — mechanical.",
+        )
+        hotel.update(
+            status="at_risk",
+            status_label="At risk",
+            note="The first night is forfeited if arrival slips past tonight.",
+        )
+        car.update(
+            status="on_track",
+            status_label="On track",
+            note="Unaffected while arrival stays within the booking window.",
+        )
+    elif TRIP_STATE["status"] == "recovered":
+        plan = PLANS_BY_ID.get(TRIP_STATE["selected_plan_id"]) or PLANS[0]
+        flight.update(
+            title=f"{plan['carrier']} · protected",
+            detail=f"{plan['schedule']} · {plan['stops'].lower()}",
+            status="recovered",
+            status_label="Recovered",
+            note=f"Replacement itinerary confirmed in simulation: {plan['arrival']}.",
+        )
+        hotel.update(**plan["hotel_note"], status_label="Updated")
+        car.update(**plan["car_note"], status_label="Updated")
+
+    return trip
+
+
+def trip_resource(trip: Dict[str, Any]) -> Dict[str, Any]:
+    """Expose both the UI-friendly component list and spec-friendly booking keys."""
+    components = {component["kind"]: component for component in trip["components"]}
+    return {
+        **trip,
+        "flight": components.get("flight"),
+        "hotel": components.get("hotel"),
+        "car": components.get("car"),
+    }
+
+
 def net_impact(plan: Dict[str, Any]) -> int:
     """Whole-trip financial impact, not just the fare difference."""
     return plan["fare_delta"] + plan["hotel_impact"] + plan["car_impact"]
+
+
+def guardrail_violations(plan: Dict[str, Any]) -> List[str]:
+    """Hard constraints that remove a candidate before ranking or execution."""
+    checks = [
+        ("SEAT_UNAVAILABLE", not plan.get("seat_available", True)),
+        ("INVALID_ROUTE", not plan.get("route_valid", True)),
+        ("INVALID_CONNECTION", not plan.get("connection_valid", True)),
+        ("ARRIVAL_TOO_LATE", bool(plan.get("arrival_too_late", False))),
+        ("UNSUPPORTED_CABIN_DOWNGRADE", bool(plan.get("cabin_downgrade", False))),
+        ("STALE_CANDIDATE_DATA", bool(plan.get("data_stale", False))),
+        ("COST_EXCEEDS_MAXIMUM", net_impact(plan) > 1500),
+    ]
+    return [code for code, failed in checks if failed]
+
+
+def valid_plans() -> List[Dict[str, Any]]:
+    return [plan for plan in PLANS if not guardrail_violations(plan)]
+
+
+def reason_codes(plan: Dict[str, Any], profile: Dict[str, Any]) -> List[str]:
+    codes = []
+    if plan["hotel_impact"] == 0:
+        codes.append("PRESERVES_HOTEL")
+    if plan["car_impact"] == 0:
+        codes.append("PRESERVES_CAR")
+    if plan["hours_lost"] <= 6:
+        codes.append("LOW_DELAY")
+    if profile["time_sensitivity"] >= 0.75:
+        codes.append("HIGH_CUSTOMER_TIME_VALUE")
+    if plan["reliability_risk"] <= 0.18:
+        codes.append("LOW_RELIABILITY_RISK")
+    if net_impact(plan) < 0:
+        codes.append("LOWER_WHOLE_TRIP_COST")
+    return codes
+
+
+def execution_steps(plan: Dict[str, Any]) -> List[Dict[str, str]]:
+    return [
+        {"name": "Candidate revalidated", "state": "SUCCESS", "detail": "Seat, price and route constraints still pass."},
+        {"name": "Replacement flight secured", "state": "SUCCESS", "detail": plan["first_step"]},
+        {"name": "Hotel status updated", "state": "SUCCESS", "detail": plan["hotel_note"]["text"]},
+        {"name": "Car booking updated", "state": "SUCCESS", "detail": plan["car_note"]["text"]},
+        {"name": "Trip itinerary refreshed", "state": "SUCCESS", "detail": "Updated trip state and notification generated."},
+    ]
+
+
+def write_audit_record(
+    *,
+    event: str,
+    trip_id: str,
+    recommendation: Dict[str, Any],
+    selected_plan_id: Optional[str] = None,
+    execution_result: Optional[List[Dict[str, str]]] = None,
+) -> Dict[str, Any]:
+    record = {
+        "id": f"AUD-{len(AUDIT_LOGS) + 1:04d}",
+        "event": event,
+        "trip_id": trip_id,
+        "customer_id": TRIP["customer_id"],
+        "recommended": recommendation["recommended_plan_id"],
+        "selected": selected_plan_id,
+        "model_versions": {"preference": "seeded-preference-v1", "reliability": "heuristic-reliability-v1", "ranker": "ranker-v1"},
+        "scores": {row["plan"]["id"]: row["score"] for row in recommendation["scored"]},
+        "reason_codes": recommendation["reason_codes"],
+        "execution_result": execution_result,
+        "timestamp": datetime.now(timezone.utc).isoformat(),
+    }
+    AUDIT_LOGS.append(record)
+    return record
 
 
 def money(amount: float) -> str:
@@ -376,6 +551,7 @@ def public_plan(plan: Dict[str, Any]) -> Dict[str, Any]:
         "schedule": plan["schedule"],
         "arrival": plan["arrival"],
         "hours_lost": plan["hours_lost"],
+        "reliability_risk": plan["reliability_risk"],
         "fare_delta": plan["fare_delta"],
         "hotel_impact": plan["hotel_impact"],
         "car_impact": plan["car_impact"],
@@ -394,24 +570,49 @@ def score_plans(profile_id: str) -> Dict[str, Any]:
         raise HTTPException(status_code=404, detail=f"Unknown profile '{profile_id}'")
 
     weight = profile["weight"]
+    reliability_weight = 150
     scored = []
-    for plan in PLANS:
+    candidates = valid_plans()
+    if not candidates:
+        raise HTTPException(status_code=409, detail="No recovery candidates pass guardrails.")
+
+    for plan in candidates:
         net = net_impact(plan)
         time_cost = plan["hours_lost"] * weight
+        reliability_penalty = round(plan["reliability_risk"] * reliability_weight * (1 - profile["risk_tolerance"]), 2)
+        stop_penalty = 35 if plan["stops_status"] != "good" else 0
+        stop_penalty = round(stop_penalty * profile["direct_flight_preference"], 2)
+        cabin_change_penalty = 250 if plan.get("cabin_downgrade", False) else 0
+        score = round(net + time_cost + reliability_penalty + stop_penalty + cabin_change_penalty, 2)
         scored.append(
             {
                 "plan": public_plan(plan),
+                "candidate_id": plan["id"],
                 "net_impact": net,
                 "time_cost": time_cost,
-                "score": net + time_cost,
+                "reliability_penalty": reliability_penalty,
+                "stop_penalty": stop_penalty,
+                "cabin_change_penalty": cabin_change_penalty,
+                "score": score,
                 "breakdown": (
                     f"Financial {signed_money(net)}  +  Time {plan['hours_lost']}h "
-                    f"× {CURRENCY} {weight}/hr = {money(time_cost)}"
+                    f"× {CURRENCY} {weight}/hr = {money(time_cost)}  +  Reliability "
+                    f"{round(plan['reliability_risk'] * 100)}% risk = {money(reliability_penalty)}"
                 ),
+                "score_breakdown": {
+                    "net_financial_impact": net,
+                    "time_penalty": time_cost,
+                    "reliability_penalty": reliability_penalty,
+                    "stop_penalty": stop_penalty,
+                    "cabin_change_penalty": cabin_change_penalty,
+                },
             }
         )
 
     ranked = sorted(scored, key=lambda row: row["score"])
+    for index, row in enumerate(ranked, start=1):
+        row["rank"] = index
+        row["plan"]["rank"] = index
     winner, runner_up = ranked[0], ranked[1]
     wp = winner["plan"]
     raw_winner = PLANS_BY_ID[wp["id"]]
@@ -436,14 +637,34 @@ def score_plans(profile_id: str) -> Dict[str, Any]:
         "currency": CURRENCY,
         "recommended_plan_id": wp["id"],
         "scored": scored,
+        "recommended": {
+            "candidate_id": wp["id"],
+            "score": winner["score"],
+            "rank": 1,
+            "breakdown": winner["score_breakdown"],
+        },
+        "alternatives": [
+            {
+                "candidate_id": row["plan"]["id"],
+                "score": row["score"],
+                "rank": row["rank"],
+                "breakdown": row["score_breakdown"],
+            }
+            for row in ranked[1:]
+        ],
         "ranked_ids": [row["plan"]["id"] for row in ranked],
-        "formula": "Personalized score = whole-trip financial impact + (hours lost × inferred time value). Lower is better.",
+        "formula": (
+            "Personalized score = whole-trip financial impact + time penalty + reliability "
+            "penalty + stop penalty + cabin-change penalty. Lower is better."
+        ),
+        "reason_codes": reason_codes(raw_winner, profile),
         "explanation": (
             f"{wp['name']} is recommended for a {profile['name'].lower()} traveler "
             f"({profile['description']}). It {net_text} once fare, hotel and car rental are "
-            f"combined, and gives up {hours} extra hour{'' if hours == 1 else 's'} — a personalized "
+            f"combined, gives up {hours} extra hour{'' if hours == 1 else 's'}, and carries a "
+            f"{round(wp['reliability_risk'] * 100)}% predicted disruption risk — a personalized "
             f"score of {money(winner['score'])}, {money(gap)} better than {runner_up['plan']['name']}, "
-            f"the next-best option for this profile."
+            "the next-best option for this profile."
         ),
         "notification": (
             f"Your SIN→NRT flight was cancelled. We recommend {wp['name']} — {clause}. "
@@ -462,13 +683,27 @@ class LoginRequest(BaseModel):
 
 
 class ConfirmRequest(BaseModel):
-    plan_id: str
+    plan_id: Optional[str] = None
+    candidate_id: Optional[str] = None
+    trip_id: str = "TRIP-001"
     profile_id: str = "time"
     emergency: bool = False
 
 
 class HoldRequest(BaseModel):
     plan_id: Optional[str] = None
+
+
+class DisruptionRequest(BaseModel):
+    trip_id: str = "TRIP-001"
+    type: str = "flight_cancelled"
+    flight_number: Optional[str] = None
+    timestamp: Optional[str] = None
+
+
+class RecommendationRequest(BaseModel):
+    trip_id: str = "TRIP-001"
+    profile_id: str = "time"
 
 
 # ---------------------------------------------------------------------------
@@ -478,6 +713,11 @@ class HoldRequest(BaseModel):
 @app.get(f"{API}/health")
 def health() -> Dict[str, Any]:
     return {"status": "ok", "service": "tripshield-api", "version": app.version}
+
+
+@app.get("/health")
+def root_health() -> Dict[str, Any]:
+    return health()
 
 
 @app.post(f"{API}/auth/login")
@@ -503,14 +743,20 @@ def account() -> Dict[str, Any]:
         "currency": CURRENCY,
         "transactions": TRANSACTIONS,
         "benefits": BENEFITS,
-        "trip": TRIP,
+        "trip": current_trip(),
         "disclaimer": DISCLAIMER,
     }
 
 
 @app.get(f"{API}/trip")
 def trip() -> Dict[str, Any]:
-    return {"trip": TRIP, "currency": CURRENCY}
+    return {"trip": current_trip(), "currency": CURRENCY}
+
+
+@app.get(f"{API}/trips/{{trip_id}}")
+def get_trip(trip_id: str) -> Dict[str, Any]:
+    canonical_trip_id(trip_id)
+    return {"trip": trip_resource(current_trip()), "currency": CURRENCY, "disclaimer": DISCLAIMER}
 
 
 @app.get(f"{API}/benefits")
@@ -526,12 +772,54 @@ def profiles() -> Dict[str, Any]:
 @app.post(f"{API}/disruption/simulate")
 def simulate_disruption(profile_id: str = "time") -> Dict[str, Any]:
     """Fire the cancellation and return the scored recovery set in one round trip."""
+    TRIP_STATE.update(status="disrupted", selected_plan_id=None, last_disruption=deepcopy(DISRUPTION))
     result = score_plans(profile_id)
+    write_audit_record(event="recommendation", trip_id=TRIP["id"], recommendation=result)
     return {
         "disruption": DISRUPTION,
-        "trip": TRIP,
+        "trip": current_trip(),
         "currency": CURRENCY,
         "recovery": result,
+        "disclaimer": DISCLAIMER,
+    }
+
+
+@app.post(f"{API}/disruptions")
+def create_disruption(payload: DisruptionRequest) -> Dict[str, Any]:
+    canonical_trip_id(payload.trip_id)
+    if payload.type not in {"flight_cancelled", "flight_delayed"}:
+        raise HTTPException(status_code=422, detail="Supported disruption types are flight_cancelled and flight_delayed.")
+
+    disruption = deepcopy(DISRUPTION)
+    disruption["kind"] = payload.type
+    disruption["type"] = payload.type
+    disruption["flight_number"] = payload.flight_number or "SQ638"
+    disruption["timestamp"] = payload.timestamp or datetime.now(timezone.utc).isoformat()
+
+    TRIP_STATE.update(status="disrupted", selected_plan_id=None, last_disruption=disruption)
+    return {"disruption": disruption, "trip": trip_resource(current_trip()), "disclaimer": DISCLAIMER}
+
+
+@app.post(f"{API}/recommendations")
+def create_recommendation(payload: RecommendationRequest) -> Dict[str, Any]:
+    canonical_trip_id(payload.trip_id)
+    if TRIP_STATE["status"] == "confirmed":
+        TRIP_STATE.update(status="disrupted", selected_plan_id=None, last_disruption=deepcopy(DISRUPTION))
+
+    result = score_plans(payload.profile_id)
+    audit = write_audit_record(event="recommendation", trip_id=TRIP["id"], recommendation=result)
+    ranked = sorted(result["scored"], key=lambda row: row["score"])
+    return {
+        "trip_id": TRIP["id"],
+        "recommended_plan": ranked[0]["plan"],
+        "alternatives": [row["plan"] for row in ranked[1:]],
+        "explanation": {
+            "text": result["explanation"],
+            "formula": result["formula"],
+            "reason_codes": result["reason_codes"],
+        },
+        "recovery": result,
+        "audit_id": audit["id"],
         "disclaimer": DISCLAIMER,
     }
 
@@ -539,6 +827,12 @@ def simulate_disruption(profile_id: str = "time") -> Dict[str, Any]:
 @app.get(f"{API}/recovery")
 def recovery(profile_id: str = "time") -> Dict[str, Any]:
     return {"currency": CURRENCY, "recovery": score_plans(profile_id), "disclaimer": DISCLAIMER}
+
+
+@app.get(f"{API}/recovery/{{trip_id}}")
+def trip_recovery(trip_id: str, profile_id: str = "time") -> Dict[str, Any]:
+    canonical_trip_id(trip_id)
+    return {"trip_id": TRIP["id"], "currency": CURRENCY, "recovery": score_plans(profile_id), "disclaimer": DISCLAIMER}
 
 
 @app.post(f"{API}/recovery/hold")
@@ -561,17 +855,45 @@ def hold_seat(payload: HoldRequest) -> Dict[str, Any]:
 
 @app.post(f"{API}/recovery/confirm")
 def confirm_plan(payload: ConfirmRequest) -> Dict[str, Any]:
-    plan = PLANS_BY_ID.get(payload.plan_id)
+    canonical_trip_id(payload.trip_id)
+    plan_id = payload.candidate_id or payload.plan_id
+    if not plan_id:
+        raise HTTPException(status_code=422, detail="Provide plan_id or candidate_id.")
+
+    plan = PLANS_BY_ID.get(plan_id)
     if plan is None:
-        raise HTTPException(status_code=404, detail=f"Unknown plan '{payload.plan_id}'")
+        raise HTTPException(status_code=404, detail=f"Unknown plan '{plan_id}'")
+
+    violations = guardrail_violations(plan)
+    if violations:
+        refreshed = score_plans(payload.profile_id)
+        return {
+            "confirmed": False,
+            "refreshed": True,
+            "message": "This option is no longer available. We have refreshed your recovery options.",
+            "violations": violations,
+            "recovery": refreshed,
+            "disclaimer": DISCLAIMER,
+        }
 
     result = score_plans(payload.profile_id)
     net = net_impact(plan)
-    followed_recommendation = payload.plan_id == result["recommended_plan_id"]
+    followed_recommendation = plan_id == result["recommended_plan_id"]
+    steps = execution_steps(plan)
+    TRIP_STATE.update(status="recovered", selected_plan_id=plan["id"])
+    audit = write_audit_record(
+        event="confirmation",
+        trip_id=TRIP["id"],
+        recommendation=result,
+        selected_plan_id=plan["id"],
+        execution_result=steps,
+    )
 
     return {
         "confirmed": True,
         "plan_id": plan["id"],
+        "candidate_id": plan["id"],
+        "trip_id": TRIP["id"],
         "title": (
             "Emergency replacement activated."
             if payload.emergency
@@ -587,6 +909,16 @@ def confirm_plan(payload: ConfirmRequest) -> Dict[str, Any]:
         "new_total": TRIP["total"] + net,
         "net_impact": net,
         "followed_recommendation": followed_recommendation,
+        "execution_steps": steps,
+        "trip": trip_resource(current_trip()),
+        "audit_id": audit["id"],
         "journey": plan["journey"],
         "disclaimer": DISCLAIMER,
     }
+
+
+@app.get(f"{API}/recommendations/{{trip_id}}/audit")
+def recommendation_audit(trip_id: str) -> Dict[str, Any]:
+    canonical_trip_id(trip_id)
+    records = [record for record in AUDIT_LOGS if record["trip_id"] == TRIP["id"]]
+    return {"trip_id": TRIP["id"], "audit": records}

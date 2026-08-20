@@ -68,12 +68,13 @@ under `prefers-reduced-motion`. Status is always text plus icon, never colour al
 
 ```bash
 npm install
-python -m venv .venv && .venv/Scripts/python -m pip install -r requirements.txt
+python3 -m venv .venv && .venv/bin/python -m pip install -r requirements.txt
 ```
 
 Run the two processes in separate terminals:
 
 ```bash
+source .venv/bin/activate
 npm run dev:api
 ```
 
@@ -106,16 +107,26 @@ DESIGN.md               The American Express design system this is built on
 
 | Method | Route | Purpose |
 | --- | --- | --- |
+| `GET` | `/health` | Platform-neutral liveness |
 | `GET` | `/api/health` | Liveness |
 | `POST` | `/api/auth/login` | Demo credential check |
 | `GET` | `/api/account` | Member, card, transactions, benefits, trip |
 | `GET` | `/api/trip` | The confirmed trip and its components |
+| `GET` | `/api/trips/TRIP-001` | Spec-compatible trip resource |
 | `GET` | `/api/benefits` | Membership benefits |
 | `GET` | `/api/profiles` | Inferred traveler profiles and their histories |
+| `POST` | `/api/disruptions` | Create the synthetic cancellation or delay event |
+| `POST` | `/api/recommendations` | Run impact, guardrails, preference, reliability and ranking |
 | `POST` | `/api/disruption/simulate` | Fire the cancellation, return the scored recovery set |
 | `GET` | `/api/recovery?profile_id=` | Re-score the paths for a different inferred weight |
+| `GET` | `/api/recovery/TRIP-001` | Spec-compatible recovery result |
 | `POST` | `/api/recovery/hold` | Hold a replacement seat for 90 minutes |
 | `POST` | `/api/recovery/confirm` | Confirm a path, return the booking reference |
+| `GET` | `/api/recommendations/TRIP-001/audit` | Recommendation and confirmation audit records |
+
+The ranker now returns a transparent breakdown for financial impact, time penalty,
+predicted reliability risk, stop penalty and cabin-change penalty. Confirmation returns
+Saga-style simulated execution steps; no real booking, payment, refund or claim is made.
 
 ## Deployment
 

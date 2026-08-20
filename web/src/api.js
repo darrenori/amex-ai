@@ -42,6 +42,16 @@ export const api = {
   account: () => request('/account'),
   benefits: () => request('/benefits'),
   profiles: () => request('/profiles'),
+  getTrip: (tripId = 'TRIP-001') => request(`/trips/${encodeURIComponent(tripId)}`),
+  simulateCancellation: (tripId = 'TRIP-001') =>
+    request('/disruptions', { method: 'POST', body: { trip_id: tripId, type: 'flight_cancelled' } }),
+  getRecommendations: (tripId = 'TRIP-001', profileId = 'time') =>
+    request('/recommendations', { method: 'POST', body: { trip_id: tripId, profile_id: profileId } }),
+  confirmRecovery: (tripId = 'TRIP-001', candidateId, profileId = 'time') =>
+    request('/recovery/confirm', {
+      method: 'POST',
+      body: { trip_id: tripId, candidate_id: candidateId, profile_id: profileId },
+    }),
   simulate: (profileId = 'time') =>
     request(`/disruption/simulate?profile_id=${encodeURIComponent(profileId)}`, { method: 'POST' }),
   recovery: (profileId = 'time') => request(`/recovery?profile_id=${encodeURIComponent(profileId)}`),

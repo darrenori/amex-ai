@@ -909,6 +909,29 @@
 .plan-success strong { font-size: var(--text-sm); }
 .plan-success p { margin-top: var(--space-1); font-size: var(--text-sm); color: var(--ink-muted); }
 
+.execution-list {
+  margin-top: var(--space-3);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  font-size: var(--text-sm);
+  color: var(--ink-muted);
+}
+
+.execution-list li {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-2);
+}
+
+.execution-state {
+  flex: none;
+  color: var(--success);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+}
+
 .hold-note {
   margin-top: var(--space-3);
   padding: var(--space-3) var(--space-4);

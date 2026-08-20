@@ -63,6 +63,8 @@ export function intelligenceMarkup(recovery, currency) {
             Financial <strong>${signedMoney(row.net_impact, currency)}</strong>
             &nbsp;+&nbsp; Time <strong>${row.plan.hours_lost}h × ${escapeHtml(currency)} ${profile.weight}/hr
             = ${money(row.time_cost, currency)}</strong>
+            &nbsp;+&nbsp; Reliability <strong>${Math.round(row.plan.reliability_risk * 100)}% risk
+            = ${money(row.reliability_penalty ?? 0, currency)}</strong>
           </p>
         </div>`;
     })

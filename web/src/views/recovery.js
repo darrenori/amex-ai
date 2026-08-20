@@ -64,6 +64,7 @@ function pathCard(plan, recommended, currency) {
       <div class="path-line"><span class="lbl">Hotel impact</span><span class="val">${plan.hotel_impact ? signedMoney(plan.hotel_impact, currency) : `${currency} 0`}</span></div>
       <div class="path-line"><span class="lbl">Car rental impact</span><span class="val">${plan.car_impact ? signedMoney(plan.car_impact, currency) : `${currency} 0`}</span></div>
       <div class="path-line"><span class="lbl">Time lost</span><span class="val">${plan.hours_lost} hr</span></div>
+      <div class="path-line"><span class="lbl">Reliability risk</span><span class="val">${Math.round(plan.reliability_risk * 100)}%</span></div>
 
       <hr class="divider">
 
@@ -211,6 +212,7 @@ export function renderRecovery(container, { payload, profiles, onBack, announce 
             <div>
               <strong id="successTitle"></strong>
               <p id="successMessage"></p>
+              <ol class="execution-list" id="executionSteps"></ol>
             </div>
           </div>
           <button class="btn btn-quiet" id="undoButton" type="button">Undo change</button>
@@ -250,6 +252,7 @@ export function renderRecovery(container, { payload, profiles, onBack, announce 
     success: container.querySelector('#planSuccess'),
     successTitle: container.querySelector('#successTitle'),
     successMessage: container.querySelector('#successMessage'),
+    executionSteps: container.querySelector('#executionSteps'),
     undoButton: container.querySelector('#undoButton'),
     toggles: container.querySelector('#profileToggles'),
     intelligence: container.querySelector('#intelligence'),
@@ -290,6 +293,13 @@ export function renderRecovery(container, { payload, profiles, onBack, announce 
     el.success.hidden = false;
     el.successTitle.textContent = result.title;
     el.successMessage.textContent = result.message;
+    el.executionSteps.innerHTML = (result.execution_steps ?? [])
+      .map((step) => `
+        <li>
+          <span class="execution-state">${escapeHtml(step.state)}</span>
+          <span><strong>${escapeHtml(step.name)}</strong>${step.detail ? ` · ${escapeHtml(step.detail)}` : ''}</span>
+        </li>`)
+      .join('');
     el.confirmButton.disabled = true;
     el.holdButton.disabled = true;
     el.confirmNote.textContent = result.followed_recommendation
@@ -388,7 +398,14 @@ export function renderRecovery(container, { payload, profiles, onBack, announce 
       try {
         const result = await api.confirm(state.selectedPlanId, state.profileId, emergency);
         closeModal(false);
-        showSuccess(result);
+        if (result.refreshed) {
+          state.recovery = result.recovery;
+          state.selectedPlanId = state.recovery.recommended_plan_id;
+          paint();
+          announce(result.message);
+        } else {
+          showSuccess(result);
+        }
       } catch (error) {
         announce(error.message);
         closeModal();

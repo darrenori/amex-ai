@@ -174,7 +174,16 @@ function showAccount() {
 
 async function showRecovery() {
   try {
-    const payload = await api.simulate(session.profiles[0]?.id ?? 'time');
+    const profileId = session.profiles[0]?.id ?? 'time';
+    const disruptionResult = await api.simulateCancellation('TRIP-001');
+    const recommendationResult = await api.getRecommendations('TRIP-001', profileId);
+    const payload = {
+      disruption: disruptionResult.disruption,
+      trip: disruptionResult.trip,
+      currency: recommendationResult.recovery.currency ?? recommendationResult.currency ?? disruptionResult.currency,
+      recovery: recommendationResult.recovery,
+      disclaimer: recommendationResult.disclaimer,
+    };
     dom.accountView.hidden = true;
     dom.recoveryView.hidden = false;
     session.stopRecovery = renderRecovery(dom.recoveryView, {
