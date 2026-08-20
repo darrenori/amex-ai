@@ -1,0 +1,917 @@
+<!doctype html>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>TripShield</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@500;600;700&display=swap" rel="stylesheet">
+<style>
+  /* ============ TOKENS ============ */
+  :root{
+    --bg:#eef1f0;
+    --surface:#ffffff;
+    --surface-2:#f6f8f7;
+    --border:#d7dfdc;
+    --ink:#14202a;
+    --ink-secondary:#526270;
+    --ink-muted:#7c8894;
+    --accent:#006fcf;
+    --accent-deep:#002d72;
+    --accent-ink:#ffffff;
+    --accent-soft:#e5f1fc;
+    --status-good:#1a9c5b;
+    --status-good-soft:#e3f5eb;
+    --status-warn:#a97a05;
+    --status-warn-soft:#faf1de;
+    --status-critical:#b8272f;
+    --status-critical-soft:#fbe7e6;
+    --shadow: 0 1px 2px rgba(20,32,42,0.06), 0 6px 20px -8px rgba(20,32,42,0.12);
+  }
+  @media (prefers-color-scheme: dark){
+    :root:not([data-theme="light"]){
+      --bg:#0f1418;
+      --surface:#161c22;
+      --surface-2:#1c242b;
+      --border:#2b343c;
+      --ink:#e8edf0;
+      --ink-secondary:#a9b6bf;
+      --ink-muted:#78868f;
+      --accent:#3d8ae0;
+      --accent-deep:#a9c8f2;
+      --accent-ink:#06141c;
+      --accent-soft:rgba(61,138,224,0.18);
+      --status-good:#279c62;
+      --status-good-soft:rgba(39,156,98,0.16);
+      --status-warn:#b98300;
+      --status-warn-soft:rgba(185,131,0,0.16);
+      --status-critical:#d0405a;
+      --status-critical-soft:rgba(208,64,90,0.16);
+      --shadow: 0 1px 2px rgba(0,0,0,0.3), 0 8px 24px -8px rgba(0,0,0,0.5);
+    }
+  }
+  :root[data-theme="dark"]{
+    --bg:#0f1418;
+    --surface:#161c22;
+    --surface-2:#1c242b;
+    --border:#2b343c;
+    --ink:#e8edf0;
+    --ink-secondary:#a9b6bf;
+    --ink-muted:#78868f;
+    --accent:#3d8ae0;
+    --accent-deep:#a9c8f2;
+    --accent-ink:#06141c;
+    --accent-soft:rgba(61,138,224,0.18);
+    --status-good:#279c62;
+    --status-good-soft:rgba(39,156,98,0.16);
+    --status-warn:#b98300;
+    --status-warn-soft:rgba(185,131,0,0.16);
+    --status-critical:#d0405a;
+    --status-critical-soft:rgba(208,64,90,0.16);
+    --shadow: 0 1px 2px rgba(0,0,0,0.3), 0 8px 24px -8px rgba(0,0,0,0.5);
+  }
+
+  /* ============ BASE ============ */
+  *{box-sizing:border-box;}
+  body{
+    margin:0;
+    background:var(--bg);
+    color:var(--ink);
+    font-family:"IBM Plex Sans",system-ui,-apple-system,"Segoe UI",sans-serif;
+    line-height:1.5;
+    -webkit-font-smoothing:antialiased;
+  }
+  .mono{ font-family:"IBM Plex Mono",ui-monospace,"SF Mono",Menlo,monospace; font-variant-numeric:tabular-nums; }
+  .brand-bar{
+    height:4px;
+    background:linear-gradient(90deg, var(--accent-deep), var(--accent) 60%, var(--accent));
+  }
+  .wrap{ max-width:1040px; margin:0 auto; padding:24px 20px 80px; }
+
+  a{ color:inherit; }
+  h1,h2,h3{ text-wrap:balance; margin:0; }
+
+  .eyebrow{
+    font-family:"IBM Plex Mono",monospace;
+    font-size:11.5px;
+    font-weight:600;
+    letter-spacing:.09em;
+    text-transform:uppercase;
+    color:var(--ink-muted);
+  }
+
+  /* ============ HEADER / BOARD STRIP ============ */
+  .board{
+    background:var(--surface);
+    border:1px solid var(--border);
+    border-radius:10px;
+    box-shadow:var(--shadow);
+    padding:20px 22px;
+    display:flex;
+    align-items:flex-start;
+    justify-content:space-between;
+    gap:20px;
+    flex-wrap:wrap;
+  }
+  .board-id{ display:flex; align-items:center; gap:14px; }
+  .board-mark{
+    width:38px; height:38px; border-radius:7px;
+    background:linear-gradient(135deg, var(--accent) 0%, var(--accent-deep) 100%);
+    color:var(--accent-ink);
+    display:flex; align-items:center; justify-content:center;
+    font-family:"IBM Plex Mono",monospace; font-weight:700; font-size:15px;
+    letter-spacing:.02em;
+    flex-shrink:0;
+    box-shadow:0 2px 6px -1px rgba(0,111,207,0.4);
+  }
+  .board-title{ font-size:19px; font-weight:700; letter-spacing:-.01em; }
+  .board-sub{ font-size:12.5px; color:var(--ink-muted); margin-top:2px; }
+  .board-right{ display:flex; flex-direction:column; align-items:flex-end; gap:10px; }
+  .concept-badge{
+    font-family:"IBM Plex Mono",monospace; font-size:9.5px; font-weight:600;
+    letter-spacing:.05em; text-transform:uppercase; color:var(--ink-muted);
+    background:var(--surface-2); border:1px solid var(--border);
+    border-radius:5px; padding:3px 8px;
+  }
+
+  .route{
+    display:flex; align-items:center; gap:10px;
+    font-family:"IBM Plex Mono",monospace;
+  }
+  .route-code{ font-size:22px; font-weight:700; }
+  .route-line{
+    width:52px; height:1px; background:var(--border); position:relative;
+  }
+  .route-line::after{
+    content:"✈"; position:absolute; left:50%; top:50%;
+    transform:translate(-50%,-50%); background:var(--surface);
+    font-size:12px; color:var(--ink-muted); padding:0 4px;
+  }
+
+  .chip{
+    display:inline-flex; align-items:center; gap:6px;
+    padding:5px 10px; border-radius:6px;
+    font-size:12px; font-weight:600;
+    font-family:"IBM Plex Mono",monospace;
+    letter-spacing:.01em;
+    white-space:nowrap;
+  }
+  .chip .dot{ width:6px; height:6px; border-radius:50%; flex-shrink:0; }
+  .chip-critical{ background:var(--status-critical-soft); color:var(--status-critical); }
+  .chip-critical .dot{ background:var(--status-critical); }
+  .chip-warn{ background:var(--status-warn-soft); color:var(--status-warn); }
+  .chip-warn .dot{ background:var(--status-warn); }
+  .chip-good{ background:var(--status-good-soft); color:var(--status-good); }
+  .chip-good .dot{ background:var(--status-good); }
+  .chip-accent{ background:var(--accent-soft); color:var(--accent); }
+  .chip-accent .dot{ background:var(--accent); }
+
+  .icon-badge{
+    width:32px; height:32px; border-radius:8px; flex-shrink:0;
+    display:flex; align-items:center; justify-content:center;
+  }
+  .icon-badge svg{ width:16px; height:16px; display:block; }
+  .icon-badge.critical{ background:var(--status-critical-soft); color:var(--status-critical); }
+  .icon-badge.warn{ background:var(--status-warn-soft); color:var(--status-warn); }
+  .icon-badge.good{ background:var(--status-good-soft); color:var(--status-good); }
+  .icon-badge.accent{ background:var(--accent-soft); color:var(--accent); }
+  .icon-badge.sm{ width:26px; height:26px; border-radius:7px; }
+  .icon-badge.sm svg{ width:13px; height:13px; }
+  .inline-ico{ width:12px; height:12px; vertical-align:-2px; margin-right:2px; }
+  .inline-ico svg{ width:100%; height:100%; display:block; }
+
+  /* ============ SECTIONS ============ */
+  section{ margin-top:32px; }
+  .section-head{ margin-bottom:16px; }
+  .section-head h2{ font-size:16px; font-weight:700; }
+  .section-head p{ margin:5px 0 0; font-size:13.5px; color:var(--ink-secondary); max-width:60ch; }
+
+  /* ============ TRIP SNAPSHOT ============ */
+  .snapshot-grid{ display:grid; grid-template-columns:repeat(3,1fr); gap:12px; }
+  .snap-card{
+    background:var(--surface); border:1px solid var(--border);
+    border-left:3px solid var(--border);
+    border-radius:8px; padding:16px 16px 15px;
+    box-shadow:var(--shadow);
+  }
+  .snap-card.is-critical{ border-left-color:var(--status-critical); }
+  .snap-card.is-warn{ border-left-color:var(--status-warn); }
+  .snap-card.is-good{ border-left-color:var(--status-good); }
+  .snap-top{ display:flex; align-items:center; justify-content:space-between; gap:8px; }
+  .snap-id{ display:flex; align-items:center; gap:10px; }
+  .snap-label{ font-size:12px; color:var(--ink-muted); font-weight:600; }
+  .snap-title{ font-size:15px; font-weight:600; margin-top:12px; }
+  .snap-title del{ color:var(--ink-muted); font-weight:500; text-decoration-color:var(--status-critical); }
+  .snap-detail{ font-size:12.5px; color:var(--ink-secondary); margin-top:6px; }
+
+  /* ============ RECOVERY PATHS ============ */
+  .path-grid{ display:grid; grid-template-columns:repeat(3,1fr); gap:14px; }
+  .path-card{
+    background:var(--surface); border:1px solid var(--border);
+    border-radius:10px; padding:18px; box-shadow:var(--shadow);
+    display:flex; flex-direction:column; gap:12px;
+    opacity:0; transform:translateY(4px);
+    animation:rise .32s ease forwards;
+  }
+  .path-card:nth-child(1){ animation-delay:.02s; }
+  .path-card:nth-child(2){ animation-delay:.1s; }
+  .path-card:nth-child(3){ animation-delay:.18s; }
+  @keyframes rise{ to{ opacity:1; transform:none; } }
+  @media (prefers-reduced-motion: reduce){
+    .path-card{ animation:none; opacity:1; transform:none; }
+  }
+
+  .path-head{ display:flex; align-items:flex-start; gap:11px; }
+  .path-head-text{ display:flex; flex-direction:column; gap:5px; min-width:0; }
+  .path-name{ font-size:15.5px; font-weight:700; line-height:1.25; }
+  .path-tag{ font-size:10.5px; color:var(--accent); font-family:"IBM Plex Mono",monospace; font-weight:600; letter-spacing:.04em; }
+  .path-flight{ display:flex; align-items:center; justify-content:space-between; gap:8px; font-size:12px; color:var(--ink-secondary); }
+  .path-flight .mono{ color:var(--ink); font-weight:600; }
+  .path-sched{ font-size:12.5px; color:var(--ink-secondary); }
+  .path-sched .mono{ color:var(--ink); font-weight:600; }
+
+  .impact-row{ font-size:12.5px; display:flex; justify-content:space-between; align-items:center; }
+  .impact-row .lbl{ color:var(--ink-muted); }
+  .impact-row .val{ font-weight:600; }
+  .val-good{ color:var(--status-good); }
+  .val-warn{ color:var(--status-warn); }
+
+  .divider{ height:1px; background:var(--border); }
+
+  .diverge{ margin-top:2px; }
+  .diverge-label{ display:flex; justify-content:space-between; font-size:11.5px; color:var(--ink-muted); margin-bottom:6px; }
+  .diverge-track{
+    position:relative; height:10px; border-radius:6px;
+    background:var(--surface-2); border:1px solid var(--border);
+  }
+  .diverge-mid{ position:absolute; left:50%; top:-3px; bottom:-3px; width:1px; background:var(--border); }
+  .diverge-fill{ position:absolute; top:0; bottom:0; border-radius:6px; }
+  .diverge-fill.cost{ background:var(--status-warn); left:50%; }
+  .diverge-fill.save{ background:var(--status-good); right:50%; }
+  .diverge-figure{ text-align:center; font-size:13.5px; font-weight:700; margin-top:8px; }
+
+  .subrow{ display:flex; align-items:center; gap:7px; font-size:12px; }
+  .subrow .dot{ width:5px; height:5px; border-radius:50%; flex-shrink:0; }
+  .subrow.g .dot{ background:var(--status-good); } .subrow.g{ color:var(--status-good); }
+  .subrow.w .dot{ background:var(--status-warn); } .subrow.w{ color:var(--status-warn); }
+  .subrow.c .dot{ background:var(--status-critical); } .subrow.c{ color:var(--status-critical); }
+  .subrow-note{ color:var(--ink-muted); font-weight:400; }
+
+  /* ============ PERSONALIZE ============ */
+  .personalize-card{
+    background:var(--surface); border:1px solid var(--border);
+    border-radius:10px; padding:20px; box-shadow:var(--shadow);
+  }
+  .toggle-group{
+    display:grid; grid-template-columns:repeat(3,1fr); gap:8px;
+    background:var(--surface-2); border:1px solid var(--border);
+    border-radius:9px; padding:5px;
+  }
+  .toggle-btn{
+    appearance:none; border:none; background:transparent; cursor:pointer;
+    padding:11px 10px; border-radius:8px;
+    font-family:"IBM Plex Sans",sans-serif;
+    text-align:left;
+    transition:background .18s ease, box-shadow .18s ease;
+  }
+  .toggle-btn:focus-visible{ outline:2px solid var(--accent); outline-offset:2px; }
+  .toggle-btn .t-head{ display:flex; align-items:center; gap:7px; }
+  .toggle-btn .t-icon{ width:15px; height:15px; color:var(--ink-muted); flex-shrink:0; }
+  .toggle-btn .t-icon svg{ width:100%; height:100%; display:block; }
+  .toggle-btn .t-name{ font-size:13px; font-weight:700; color:var(--ink); }
+  .toggle-btn .t-desc{ font-size:11px; color:var(--ink-muted); margin-top:2px; display:block; }
+  .toggle-btn.active{ background:var(--surface); box-shadow:var(--shadow); }
+  .toggle-btn.active .t-name{ color:var(--accent); }
+  .toggle-btn.active .t-icon{ color:var(--accent); }
+
+  .history-panel{
+    margin-top:16px; padding:14px 16px; border-radius:10px;
+    background:var(--surface-2); border:1px solid var(--border);
+  }
+  .history-head{
+    font-size:11px; font-weight:600; color:var(--ink-muted);
+    text-transform:uppercase; letter-spacing:.06em; margin-bottom:10px;
+  }
+  .history-item{ display:flex; gap:10px; font-size:12.5px; padding:6px 0; }
+  .history-item + .history-item{ border-top:1px solid var(--border); }
+  .history-when{
+    flex-shrink:0; width:88px; color:var(--ink-muted);
+    font-family:"IBM Plex Mono",monospace; font-size:11px; padding-top:1px;
+  }
+  .history-text{ color:var(--ink-secondary); }
+
+  .weight-line{
+    margin-top:14px; display:flex; align-items:center; gap:8px;
+    font-size:12.5px; color:var(--ink-secondary);
+  }
+  .weight-line .mono{ color:var(--ink); font-weight:600; }
+
+  .score-list{ margin-top:20px; display:flex; flex-direction:column; gap:14px; }
+  .score-item{ display:flex; flex-direction:column; gap:5px; }
+  .score-row{
+    display:grid; grid-template-columns:172px 1fr auto; align-items:center; gap:12px;
+  }
+  .score-breakdown{
+    font-family:"IBM Plex Mono",monospace; font-size:11px; color:var(--ink-muted);
+    padding-left:184px;
+  }
+  .score-breakdown b{ color:var(--ink-secondary); font-weight:600; }
+  @media (max-width:760px){ .score-breakdown{ padding-left:0; } }
+  .score-path{ font-size:13px; font-weight:700; display:flex; align-items:center; gap:6px; }
+  .score-track{
+    position:relative; height:20px; background:var(--surface-2);
+    border:1px solid var(--border); border-radius:6px; overflow:hidden;
+  }
+  .score-fill{
+    position:absolute; left:0; top:0; bottom:0; border-radius:5px;
+    background:var(--ink-muted); opacity:.55;
+    transition:width .45s cubic-bezier(.4,0,.2,1);
+  }
+  .score-row.winner .score-fill{ background:var(--accent); opacity:1; }
+  .score-figure{ font-size:13.5px; font-weight:700; text-align:right; min-width:64px; }
+  .score-row.winner .score-figure{ color:var(--accent); }
+  .win-badge{
+    font-size:9.5px; font-weight:700; letter-spacing:.06em; text-transform:uppercase;
+    background:var(--accent); color:var(--accent-ink);
+    border-radius:4px; padding:2px 6px;
+  }
+
+  .explain{
+    margin-top:20px; padding:16px 18px; border-radius:10px;
+    background:var(--accent-soft); border:1px solid var(--border);
+    font-size:13.5px; line-height:1.6; color:var(--ink);
+  }
+  .explain strong{ color:var(--accent); }
+
+  .formula{
+    margin-top:18px; padding:14px 16px; border-radius:10px;
+    background:var(--surface-2); border:1px dashed var(--border);
+    font-family:"IBM Plex Mono",monospace; font-size:12px; color:var(--ink-secondary);
+    display:flex; align-items:center; justify-content:space-between; gap:12px; flex-wrap:wrap;
+  }
+  .formula b{ color:var(--ink); }
+
+  .notif-wrap{ margin-bottom:22px; }
+  .notif-card{
+    display:flex; gap:12px; align-items:flex-start;
+    background:var(--surface); border:1px solid var(--border);
+    border-radius:10px; padding:14px 16px; box-shadow:var(--shadow);
+  }
+  .notif-icon{
+    width:34px; height:34px; border-radius:9px; flex-shrink:0;
+    background:var(--accent); color:var(--accent-ink);
+    display:flex; align-items:center; justify-content:center;
+    font-family:"IBM Plex Mono",monospace; font-weight:700; font-size:14px;
+  }
+  .notif-body{ flex:1; min-width:0; }
+  .notif-top{ display:flex; align-items:baseline; justify-content:space-between; gap:8px; }
+  .notif-app{ font-size:12px; font-weight:700; }
+  .notif-time{ font-size:10.5px; color:var(--ink-muted); font-family:"IBM Plex Mono",monospace; flex-shrink:0; }
+  .notif-msg{ font-size:13.5px; color:var(--ink); line-height:1.5; margin-top:3px; }
+  .notif-msg strong{ color:var(--accent); }
+  .notif-caption{
+    margin-top:9px; font-size:11.5px; color:var(--ink-muted); font-style:italic;
+  }
+
+  .plan-picker{ display:flex; flex-direction:column; gap:8px; margin-top:12px; }
+  .plan-option{
+    display:flex; align-items:center; gap:11px;
+    padding:10px 12px; border-radius:9px;
+    border:1px solid var(--border); background:var(--surface-2);
+    cursor:pointer; text-align:left; width:100%;
+    font-family:"IBM Plex Sans",sans-serif;
+    transition:border-color .15s ease, background .15s ease;
+  }
+  .plan-option:focus-visible{ outline:2px solid var(--accent); outline-offset:2px; }
+  .plan-radio{
+    width:16px; height:16px; border-radius:50%; border:2px solid var(--border);
+    flex-shrink:0; position:relative; background:var(--surface);
+  }
+  .plan-option.selected .plan-radio{ border-color:var(--accent); }
+  .plan-option.selected .plan-radio::after{
+    content:""; position:absolute; inset:3px; border-radius:50%; background:var(--accent);
+  }
+  .plan-option.selected{ border-color:var(--accent); background:var(--accent-soft); }
+  .plan-main{ flex:1; min-width:0; }
+  .plan-name-row{ display:flex; align-items:center; gap:8px; }
+  .plan-name{ font-size:12.5px; font-weight:700; color:var(--ink); }
+  .plan-rec-badge{
+    font-size:9px; font-weight:700; letter-spacing:.05em; text-transform:uppercase;
+    background:var(--accent); color:var(--accent-ink); border-radius:4px; padding:1.5px 5px;
+  }
+  .plan-stat{ font-size:11px; color:var(--ink-muted); margin-top:2px; font-family:"IBM Plex Mono",monospace; }
+
+  .plan-confirm-row{ display:flex; align-items:center; justify-content:space-between; gap:12px; margin-top:12px; flex-wrap:wrap; }
+  .plan-selected-note{ font-size:12px; color:var(--ink-secondary); }
+  .plan-confirm-btn{
+    appearance:none; border:none; cursor:pointer;
+    background:var(--accent); color:var(--accent-ink);
+    font-family:"IBM Plex Sans",sans-serif; font-weight:600; font-size:12.5px;
+    padding:9px 16px; border-radius:8px;
+    transition:background .15s ease, opacity .15s ease;
+  }
+  .plan-confirm-btn:hover{ opacity:.9; }
+  .plan-confirm-btn.confirmed{ background:var(--status-good); }
+
+  .inspect-divider{
+    display:flex; align-items:center; gap:10px;
+    margin:0 0 16px; font-size:11px; color:var(--ink-muted);
+    text-transform:uppercase; letter-spacing:.06em; font-weight:600;
+  }
+  .inspect-divider .line{ flex:1; height:1px; background:var(--border); }
+
+  /* ============ MERCHANTS ============ */
+  .merchant-grid{ display:grid; grid-template-columns:repeat(3,1fr); gap:12px; }
+  .merchant-card{
+    background:var(--surface); border:1px solid var(--border);
+    border-radius:10px; padding:15px; box-shadow:var(--shadow);
+  }
+  .merchant-top{ display:flex; justify-content:space-between; align-items:flex-start; gap:8px; }
+  .merchant-name{ font-size:13.5px; font-weight:700; }
+  .merchant-cat{ font-size:11px; color:var(--ink-muted); margin-top:2px; }
+  .merchant-meta{ display:flex; gap:12px; margin-top:12px; font-size:11.5px; color:var(--ink-secondary); }
+  .merchant-meta span{ display:flex; align-items:center; gap:4px; }
+  .merchant-pay{
+    margin-top:11px; font-size:11px; color:var(--status-good);
+    display:flex; align-items:center; gap:5px; font-weight:600;
+  }
+
+  .rank-note{
+    display:flex; align-items:center; gap:8px;
+    font-size:12px; color:var(--ink-muted); margin-top:14px;
+  }
+  .rank-note .line{ flex:1; height:1px; background:var(--border); }
+
+  /* ============ JOURNEY ============ */
+  .journey-card{
+    background:var(--surface); border:1px solid var(--border);
+    border-radius:10px; padding:20px 20px 4px; box-shadow:var(--shadow);
+  }
+  .journey-for{
+    font-size:12px; color:var(--ink-muted); margin-bottom:18px;
+    padding-bottom:16px; border-bottom:1px solid var(--border);
+  }
+  .journey-for strong{ color:var(--accent); font-weight:700; }
+  .journey{ display:flex; flex-direction:column; }
+  .journey-step{ position:relative; display:flex; gap:14px; padding-bottom:24px; }
+  .journey-step:last-child{ padding-bottom:22px; }
+  .journey-line{
+    position:absolute; left:15px; top:34px; bottom:0; width:2px; background:var(--border);
+  }
+  .journey-step:last-child .journey-line{ display:none; }
+  .journey-node{
+    width:32px; height:32px; border-radius:50%; flex-shrink:0; z-index:1;
+    display:flex; align-items:center; justify-content:center;
+    background:var(--surface-2); border:1px solid var(--border);
+  }
+  .journey-node svg{ width:15px; height:15px; display:block; }
+  .journey-node.accent{ background:var(--accent-soft); color:var(--accent); border-color:transparent; }
+  .journey-node.good{ background:var(--status-good-soft); color:var(--status-good); border-color:transparent; }
+  .journey-node.warn{ background:var(--status-warn-soft); color:var(--status-warn); border-color:transparent; }
+  .journey-node.critical{ background:var(--status-critical-soft); color:var(--status-critical); border-color:transparent; }
+  .journey-content{ flex:1; min-width:0; padding-top:4px; }
+  .journey-step-label{
+    font-size:10px; color:var(--ink-muted); font-weight:700;
+    text-transform:uppercase; letter-spacing:.06em; font-family:"IBM Plex Mono",monospace;
+  }
+  .journey-title{ font-size:13.5px; font-weight:700; margin-top:3px; }
+  .journey-detail{ font-size:12.5px; color:var(--ink-secondary); margin-top:3px; line-height:1.5; }
+  .journey-pay{ font-size:11px; color:var(--status-good); font-weight:600; margin-top:6px; }
+
+  /* ============ FOOTER ============ */
+  footer{
+    margin-top:48px; padding-top:20px; border-top:1px solid var(--border);
+    font-size:11.5px; color:var(--ink-muted); line-height:1.7;
+  }
+
+  @media (max-width:760px){
+    .snapshot-grid, .path-grid, .merchant-grid{ grid-template-columns:1fr; }
+    .toggle-group{ grid-template-columns:1fr; }
+    .score-row{ grid-template-columns:1fr; row-gap:6px; }
+    .score-figure{ text-align:left; }
+  }
+</style>
+
+<div class="brand-bar"></div>
+<div class="wrap">
+
+  <!-- ===================== HEADER ===================== -->
+  <div class="board">
+    <div class="board-id">
+      <div class="board-mark">TS</div>
+      <div>
+        <div class="board-title">TripShield</div>
+        <div class="board-sub">AI-powered disruption recovery for American Express Card Members</div>
+      </div>
+    </div>
+    <div class="board-right">
+      <span class="concept-badge">Hackathon concept · not a live Amex service</span>
+      <div style="display:flex; align-items:center; gap:16px; flex-wrap:wrap;">
+        <div class="route">
+          <span class="route-code">SIN</span>
+          <span class="route-line"></span>
+          <span class="route-code">NRT</span>
+        </div>
+        <span class="chip chip-critical"><span class="dot"></span>Flight cancelled</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===================== TRIP SNAPSHOT ===================== -->
+  <section>
+    <div class="section-head">
+      <h2>1 · Trip snapshot</h2>
+      <p>Every component of this trip was charged to the same card — so a disruption to one leg is visible against all of them, not just the flight.</p>
+    </div>
+    <div class="snapshot-grid">
+      <div class="snap-card is-critical">
+        <div class="snap-top">
+          <div class="snap-id">
+            <span class="icon-badge critical"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M3 11 L21 4 L13 20 L11 13 Z"/></svg></span>
+            <span class="snap-label">FLIGHT</span>
+          </div>
+          <span class="chip chip-critical"><span class="dot"></span>Cancelled</span>
+        </div>
+        <div class="snap-title mono"><del>SQ638 · 18:05</del></div>
+        <div class="snap-detail">Singapore → Tokyo Narita · cancelled 3h before departure, mechanical</div>
+      </div>
+      <div class="snap-card is-warn">
+        <div class="snap-top">
+          <div class="snap-id">
+            <span class="icon-badge warn"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="10" width="18" height="6" rx="1.4"/><line x1="3" y1="16" x2="3" y2="19"/><line x1="21" y1="16" x2="21" y2="19"/><rect x="5" y="7" width="6" height="4" rx="1"/></svg></span>
+            <span class="snap-label">HOTEL</span>
+          </div>
+          <span class="chip chip-warn"><span class="dot"></span>At risk</span>
+        </div>
+        <div class="snap-title mono">Check-in tonight · $160</div>
+        <div class="snap-detail">Non-refundable rate · forfeited if arrival slips past tonight</div>
+      </div>
+      <div class="snap-card is-good">
+        <div class="snap-top">
+          <div class="snap-id">
+            <span class="icon-badge good"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="6" rx="2"/><path d="M5 11l2-4h10l2 4"/><circle cx="7.5" cy="17.5" r="1.6" fill="currentColor" stroke="none"/><circle cx="16.5" cy="17.5" r="1.6" fill="currentColor" stroke="none"/></svg></span>
+            <span class="snap-label">CAR RENTAL</span>
+          </div>
+          <span class="chip chip-good"><span class="dot"></span>On track</span>
+        </div>
+        <div class="snap-title mono">Pickup · tomorrow 09:00</div>
+        <div class="snap-detail">Narita counter · unaffected for now</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ===================== RECOVERY PATHS ===================== -->
+  <section>
+    <div class="section-head">
+      <h2>2 · Recovery paths — scored on more than the fare</h2>
+      <p>Each option's <em>net financial impact</em> folds in what it saves or forfeits elsewhere in the trip, not just the new flight's price.</p>
+    </div>
+    <div class="path-grid" id="pathGrid"></div>
+  </section>
+
+  <!-- ===================== PERSONALIZE ===================== -->
+  <section>
+    <div class="section-head">
+      <h2>3 · Personalized recommendation</h2>
+      <p>The traveler never sees a choice of profiles — the system already knows their weight from real history and sends one rebooking, already decided.</p>
+    </div>
+    <div class="personalize-card">
+
+      <div class="notif-wrap">
+        <div class="notif-card">
+          <div class="notif-icon">TS</div>
+          <div class="notif-body">
+            <div class="notif-top"><span class="notif-app">TripShield</span><span class="notif-time">now</span></div>
+            <div class="notif-msg" id="notifMsg"></div>
+          </div>
+        </div>
+
+        <div class="plan-picker" id="planPicker"></div>
+        <div class="plan-confirm-row">
+          <span class="plan-selected-note" id="planSelectedNote"></span>
+          <button class="plan-confirm-btn" id="planConfirmBtn" type="button">Confirm this option</button>
+        </div>
+
+        <div class="notif-caption">This is the entire traveler-facing experience — one clear recommendation up front, every alternative one tap away. The final choice is always theirs.</div>
+      </div>
+
+      <div class="inspect-divider"><span class="line"></span>Behind the scenes — how the model got there<span class="line"></span></div>
+
+      <p style="font-size:12.5px; color:var(--ink-secondary); margin:0 0 14px;">The toggle below isn't a traveler-facing control — it's an inspection view so you can see the same disruption produce a different result for a different real history. A given traveler only ever has one of these active.</p>
+
+      <div class="toggle-group" id="toggleGroup"></div>
+      <div class="weight-line">Inferred time-value weight for this profile: <span class="mono" id="weightVal">$45 / hour</span></div>
+
+      <div class="history-panel">
+        <div class="history-head">Sample past choices this weight was inferred from (synthetic, for demo)</div>
+        <div id="historyList"></div>
+      </div>
+
+      <div class="score-list" id="scoreList"></div>
+
+      <div class="explain" id="explainBox"></div>
+
+      <div class="formula">
+        <span><b class="mono">Personalized Score</b> = Net Financial Impact + (Hours Lost × Time-Value Weight) &middot; lower is better</span>
+      </div>
+    </div>
+  </section>
+
+  <!-- ===================== JOURNEY ===================== -->
+  <section>
+    <div class="section-head">
+      <h2>4 · Your recovery journey</h2>
+      <p>The rebooking is one decision, not the whole answer — every next step, where to wait, how to get there, what to eat, and what happens to the rest of the trip, follows automatically from whichever plan is selected above.</p>
+    </div>
+    <div class="journey-card">
+      <div class="journey-for">Journey for <strong id="journeyForName">—</strong></div>
+      <div class="journey" id="journeyList"></div>
+    </div>
+    <div class="rank-note"><span class="line"></span>Every merchant step is ranked by proximity, availability and fit — never by promotional placement<span class="line"></span></div>
+  </section>
+
+  <footer>
+    TripShield is an independent concept prepared for the AMEX AI Hackathon 2026 and is not an official American Express product or service. All flight numbers, prices, timings and merchant listings on this page are synthetic, built for demonstration purposes — not live data or confirmed commercial partnerships. Historical preference weights per profile are illustrative, standing in for behavior a production system would infer from a member's real past choices.
+  </footer>
+
+</div>
+
+<script>
+  // ---------- Icons ----------
+  var ICONS = {
+    plane:'<svg viewBox="0 0 24 24" fill="currentColor"><path d="M3 11 L21 4 L13 20 L11 13 Z"/></svg>',
+    bed:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="10" width="18" height="6" rx="1.4"/><line x1="3" y1="16" x2="3" y2="19"/><line x1="21" y1="16" x2="21" y2="19"/><rect x="5" y="7" width="6" height="4" rx="1"/></svg>',
+    car:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="6" rx="2"/><path d="M5 11l2-4h10l2 4"/><circle cx="7.5" cy="17.5" r="1.6" fill="currentColor" stroke="none"/><circle cx="16.5" cy="17.5" r="1.6" fill="currentColor" stroke="none"/></svg>',
+    clock:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3.5 2"/></svg>',
+    scale:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="4" x2="12" y2="18"/><line x1="4" y1="8" x2="20" y2="8"/><circle cx="4" cy="13" r="3"/><circle cx="20" cy="13" r="3"/></svg>',
+    coin:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><line x1="8" y1="12" x2="16" y2="12"/><line x1="12" y1="8" x2="12" y2="16"/></svg>',
+    star:'<svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 2l2.4 6.8L21 11l-6.6 2.2L12 20l-2.4-6.8L3 11l6.6-2.2Z"/></svg>',
+    cup:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="8" width="12" height="9" rx="2"/><path d="M16 10h2a2 2 0 0 1 0 4h-2"/><line x1="7" y1="4" x2="7" y2="6"/><line x1="10" y1="3" x2="10" y2="6"/><line x1="13" y1="4" x2="13" y2="6"/></svg>',
+    pin:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 21s7-7.2 7-12a7 7 0 0 0-14 0c0 4.8 7 12 7 12Z"/><circle cx="12" cy="9" r="2.2"/></svg>'
+  };
+
+  // ---------- Recovery journeys (per path, ordered steps) ----------
+  var JOURNEYS = {
+    A:[
+      {icon:'plane', node:'accent', label:'Step 1 · Rebooking', title:'ANA 858 confirmed', detail:'Economy · direct · departs 21:40, arrives 1 hr later than planned.'},
+      {icon:'star', node:'good', label:'Step 2 · Short wait', title:'Centurion Lounge', detail:'4 min walk · priority access, open now.', pay:'Included with this card'},
+      {icon:'bed', node:'good', label:'Step 3 · Tokyo hotel', title:'On track', detail:'Check-in still makes it — no action needed.'},
+      {icon:'car', node:'good', label:'Step 4 · Car rental', title:'On track', detail:'Pickup tomorrow 09:00, unaffected.'}
+    ],
+    B:[
+      {icon:'plane', node:'accent', label:'Step 1 · Rebooking', title:'JAL 712 confirmed', detail:'Economy · 1 stop via HKG (1h50m) · departs 08:10 tomorrow, arrives 9 hrs later than planned.'},
+      {icon:'bed', node:'accent', label:'Step 2 · Overnight wait', title:'Transit day-rate hotel', detail:'12 min walk · 4-hr block available.', pay:'Pay with this card, no new setup'},
+      {icon:'car', node:'accent', label:'Step 3 · Getting there', title:'Airport shuttle', detail:'Direct to the transit hotel, runs every 15 min.', pay:'Included with this card'},
+      {icon:'cup', node:'accent', label:'Step 4 · Evening meal', title:'Gate-side café', detail:'2 min walk · open now, seating available.', pay:'Included with this card'},
+      {icon:'bed', node:'warn', label:'Step 5 · Tokyo hotel', title:'Partial loss — $80', detail:'Forfeits half the night; booking auto-updated to tomorrow\'s check-in.'},
+      {icon:'car', node:'warn', label:'Step 6 · Car rental', title:'Rescheduled, no fee', detail:'Pickup pushed to match the new arrival time.'}
+    ],
+    C:[
+      {icon:'plane', node:'accent', label:'Step 1 · Rebooking', title:'ANA 860 confirmed', detail:'Economy · direct · departs in 2 days, 06:55, arrives 48 hrs later than planned.'},
+      {icon:'bed', node:'accent', label:'Step 2 · Extended wait', title:'Airport-area hotel, 2 nights', detail:'8 min walk · booked for the full wait.', pay:'Pay with this card, no new setup'},
+      {icon:'cup', node:'accent', label:'Step 3 · Meals', title:'Nearby dining, both days', detail:'Suggestions refresh daily near your hotel.', pay:'Included with this card'},
+      {icon:'bed', node:'critical', label:'Step 4 · Tokyo hotel', title:'Forfeited — $160', detail:'Both nights lost; no longer usable for this trip.'},
+      {icon:'car', node:'warn', label:'Step 5 · Car rental', title:'Rebooked — $60 fee', detail:'New booking made at another counter.'}
+    ]
+  };
+
+  // ---------- Data ----------
+  var PATHS = [
+    {
+      id:'A', name:'Same-Night Rebooking', tag:'PROTECTS THE TRIP',
+      carrier:'ANA 858 · Economy', stops:'Direct', stopsCls:'good',
+      sched:'Departs 21:40 · arrives 1 hr later than planned',
+      fareDelta:150, hotelLoss:0, carFee:0, timeLost:1,
+      hotel:{cls:'g', text:'Hotel preserved — check-in still makes it'},
+      car:{cls:'g', text:'Car rental pickup unaffected'}
+    },
+    {
+      id:'B', name:'Next-Morning Rebooking', tag:'LOWER FARE · PARTIAL LOSS',
+      carrier:'JAL 712 · Economy', stops:'1 stop · HKG (1h50m)', stopsCls:'warn',
+      sched:'Departs 08:10 · arrives 9 hrs later than planned',
+      fareDelta:-100, hotelLoss:80, carFee:0, timeLost:9,
+      hotel:{cls:'w', text:'Forfeits half the hotel night — $80'},
+      car:{cls:'w', text:'Pickup rescheduled — no fee'}
+    },
+    {
+      id:'C', name:'Two-Day Rebooking', tag:'CHEAPEST FARE · FULL LOSS',
+      carrier:'ANA 860 · Economy', stops:'Direct', stopsCls:'good',
+      sched:'Departs in 2 days, 06:55 · arrives 48 hrs later than planned',
+      fareDelta:-220, hotelLoss:160, carFee:60, timeLost:48,
+      hotel:{cls:'c', text:'Both nights forfeited — $160'},
+      car:{cls:'c', text:'Rebooked at another counter — $60 fee'}
+    }
+  ];
+
+  var PROFILES = [
+    {
+      id:'time', name:'Time-sensitive', desc:'pays a premium to save hours', weight:45, icon:'clock',
+      history:[
+        {when:'6 weeks ago', text:'Paid $130 more for a direct flight instead of a cheaper option with a 5-hour-longer layover.'},
+        {when:'3 months ago', text:'Rebooked the same evening after a delay instead of waiting for a cheaper next-day fare.'}
+      ]
+    },
+    {
+      id:'balanced', name:'Balanced', desc:'weighs cost and time evenly', weight:25, icon:'scale',
+      history:[
+        {when:'2 months ago', text:'Chose a flight 2 hours longer to save $90 on the fare.'},
+        {when:'5 months ago', text:'Paid $60 more than the cheapest option to avoid an overnight layover.'}
+      ]
+    },
+    {
+      id:'cost', name:'Cost-sensitive', desc:'waits longer to save money', weight:8, icon:'coin',
+      history:[
+        {when:'1 month ago', text:'Chose an itinerary 8 hours longer to save $150 on the fare.'},
+        {when:'4 months ago', text:'Waited two days for a fare drop rather than book immediately.'}
+      ]
+    }
+  ];
+
+  var activeProfile = 'time';
+
+  var NOTIF_CLAUSE = {
+    A:'keeping your hotel and car rental on track, for $150 more on the fare',
+    B:'saving you money overall, even after the change to your hotel night',
+    C:'the cheapest fare available, though it means losing both hotel nights and delaying your car rental by two days'
+  };
+
+  function netImpact(p){ return p.fareDelta + p.hotelLoss + p.carFee; }
+  function fmtMoney(n){
+    var sign = n < 0 ? '-' : '';
+    return sign + '$' + Math.abs(Math.round(n));
+  }
+  function fmtDelta(n){
+    return (n >= 0 ? '+' : '-') + '$' + Math.abs(Math.round(n));
+  }
+  function fmtItem(n){ return n ? '+$' + n : '$0'; }
+
+  // ---------- Render recovery path cards ----------
+  var grid = document.getElementById('pathGrid');
+  PATHS.forEach(function(p){
+    var net = netImpact(p);
+    var domain = 250; // fixed diverging domain, -250..+250
+    var pct = Math.min(Math.abs(net) / domain, 1) * 50; // half-track max
+    var card = document.createElement('div');
+    card.className = 'path-card';
+    card.innerHTML =
+      '<div class="path-head">' +
+        '<span class="icon-badge accent">' + ICONS.plane + '</span>' +
+        '<div class="path-head-text"><span class="path-name">' + p.name + '</span><span class="path-tag">' + p.tag + '</span></div>' +
+      '</div>' +
+      '<div class="path-flight"><span class="mono">' + p.carrier + '</span><span class="chip chip-' + p.stopsCls + '"><span class="dot"></span>' + p.stops + '</span></div>' +
+      '<div class="path-sched">' + p.sched + '</div>' +
+      '<div class="divider"></div>' +
+      '<div class="impact-row"><span class="lbl">Fare vs. original</span><span class="val ' + (p.fareDelta<=0?'val-good':'val-warn') + ' mono">' + fmtDelta(p.fareDelta) + '</span></div>' +
+      '<div class="impact-row"><span class="lbl">Hotel impact</span><span class="val mono">' + fmtItem(p.hotelLoss) + '</span></div>' +
+      '<div class="impact-row"><span class="lbl">Car rental impact</span><span class="val mono">' + fmtItem(p.carFee) + '</span></div>' +
+      '<div class="impact-row"><span class="lbl">Time lost</span><span class="val mono">' + p.timeLost + ' hr</span></div>' +
+      '<div class="divider"></div>' +
+      '<div class="diverge">' +
+        '<div class="diverge-label"><span>Net saving</span><span>Net cost</span></div>' +
+        '<div class="diverge-track">' +
+          '<div class="diverge-mid"></div>' +
+          (net >= 0
+            ? '<div class="diverge-fill cost" style="width:' + pct + '%"></div>'
+            : '<div class="diverge-fill save" style="width:' + pct + '%"></div>') +
+        '</div>' +
+        '<div class="diverge-figure ' + (net<=0?'val-good':'val-warn') + '">' + (net===0 ? 'Break-even' : (net<0 ? fmtMoney(net)+' net saved' : fmtMoney(net)+' net cost')) + '</div>' +
+      '</div>' +
+      '<div class="divider"></div>' +
+      '<div class="subrow ' + p.hotel.cls + '"><span class="inline-ico">' + ICONS.bed + '</span><span class="subrow-note">' + p.hotel.text + '</span></div>' +
+      '<div class="subrow ' + p.car.cls + '"><span class="inline-ico">' + ICONS.car + '</span><span class="subrow-note">' + p.car.text + '</span></div>';
+    grid.appendChild(card);
+  });
+
+  // ---------- Render profile toggle ----------
+  var toggleGroup = document.getElementById('toggleGroup');
+  PROFILES.forEach(function(prof){
+    var btn = document.createElement('button');
+    btn.className = 'toggle-btn' + (prof.id === activeProfile ? ' active' : '');
+    btn.setAttribute('data-id', prof.id);
+    btn.innerHTML = '<span class="t-head"><span class="t-icon">' + ICONS[prof.icon] + '</span><span class="t-name">' + prof.name + '</span></span><span class="t-desc">' + prof.desc + '</span>';
+    btn.addEventListener('click', function(){
+      activeProfile = prof.id;
+      Array.prototype.forEach.call(toggleGroup.children, function(b){
+        b.classList.toggle('active', b.getAttribute('data-id') === activeProfile);
+      });
+      renderScores();
+    });
+    toggleGroup.appendChild(btn);
+  });
+
+  // ---------- Score list + explanation ----------
+  var scoreList = document.getElementById('scoreList');
+  var explainBox = document.getElementById('explainBox');
+  var weightVal = document.getElementById('weightVal');
+  var historyList = document.getElementById('historyList');
+  var notifMsg = document.getElementById('notifMsg');
+  var planPicker = document.getElementById('planPicker');
+  var planSelectedNote = document.getElementById('planSelectedNote');
+  var planConfirmBtn = document.getElementById('planConfirmBtn');
+  var journeyList = document.getElementById('journeyList');
+  var journeyForName = document.getElementById('journeyForName');
+  var SCORE_DOMAIN = 450; // fixed track domain for bar widths
+
+  var lastScored = null;
+  var recommendedId = null;
+  var selectedPathId = null;
+
+  function renderPlanPicker(){
+    planPicker.innerHTML = lastScored.map(function(s){
+      var isSel = s.path.id === selectedPathId;
+      var isRec = s.path.id === recommendedId;
+      return '<button type="button" class="plan-option' + (isSel ? ' selected' : '') + '" data-id="' + s.path.id + '">' +
+        '<span class="plan-radio"></span>' +
+        '<span class="plan-main">' +
+          '<span class="plan-name-row"><span class="plan-name">' + s.path.name + '</span>' + (isRec ? '<span class="plan-rec-badge">Recommended</span>' : '') + '</span>' +
+          '<span class="plan-stat">' + fmtDelta(s.path.fareDelta) + ' fare &middot; ' + s.path.timeLost + 'h lost &middot; ' + (s.net <= 0 ? fmtMoney(s.net) + ' net saved' : fmtMoney(s.net) + ' net cost') + '</span>' +
+        '</span>' +
+      '</button>';
+    }).join('');
+
+    var selectedPath = lastScored.filter(function(s){ return s.path.id === selectedPathId; })[0].path;
+    planSelectedNote.textContent = 'Selected: ' + selectedPath.name + (selectedPathId === recommendedId ? ' (the recommendation)' : '');
+    planConfirmBtn.textContent = 'Confirm this option';
+    planConfirmBtn.classList.remove('confirmed');
+
+    renderJourney(selectedPathId, selectedPath.name);
+  }
+
+  function renderJourney(pathId, pathName){
+    journeyForName.textContent = pathName;
+    var steps = JOURNEYS[pathId];
+    journeyList.innerHTML = steps.map(function(s, i){
+      var isLast = i === steps.length - 1;
+      return '<div class="journey-step">' +
+        (isLast ? '' : '<div class="journey-line"></div>') +
+        '<div class="journey-node ' + s.node + '">' + ICONS[s.icon] + '</div>' +
+        '<div class="journey-content">' +
+          '<div class="journey-step-label">' + s.label + '</div>' +
+          '<div class="journey-title">' + s.title + '</div>' +
+          '<div class="journey-detail">' + s.detail + '</div>' +
+          (s.pay ? '<div class="journey-pay">✓ ' + s.pay + '</div>' : '') +
+        '</div>' +
+      '</div>';
+    }).join('');
+  }
+
+  planPicker.addEventListener('click', function(e){
+    var btn = e.target.closest('.plan-option');
+    if (!btn) return;
+    selectedPathId = btn.getAttribute('data-id');
+    renderPlanPicker();
+  });
+
+  planConfirmBtn.addEventListener('click', function(){
+    planConfirmBtn.textContent = 'Confirmed ✓';
+    planConfirmBtn.classList.add('confirmed');
+  });
+
+  function renderScores(){
+    var profile = PROFILES.filter(function(p){ return p.id === activeProfile; })[0];
+    weightVal.textContent = '$' + profile.weight + ' / hour';
+
+    historyList.innerHTML = profile.history.map(function(h){
+      return '<div class="history-item"><span class="history-when">' + h.when + '</span><span class="history-text">' + h.text + '</span></div>';
+    }).join('');
+
+    var scored = PATHS.map(function(p){
+      var timeCost = p.timeLost * profile.weight;
+      var net = netImpact(p);
+      return { path:p, net:net, timeCost:timeCost, score:net + timeCost };
+    });
+    var orderedScored = scored.slice(); // preserve A/B/C order for the plan picker
+    scored.sort(function(a,b){ return a.score - b.score; });
+    var winner = scored[0];
+    var runnerUp = scored[1];
+
+    lastScored = orderedScored;
+    recommendedId = winner.path.id;
+    selectedPathId = winner.path.id; // reset to the fresh recommendation on every profile change
+    renderPlanPicker();
+
+    scoreList.innerHTML = '';
+    scored.forEach(function(s){
+      var isWin = s === winner;
+      var pct = Math.min(Math.max(s.score,0) / SCORE_DOMAIN, 1) * 100;
+      var item = document.createElement('div');
+      item.className = 'score-item';
+      item.innerHTML =
+        '<div class="score-row' + (isWin ? ' winner' : '') + '">' +
+          '<div class="score-path">' + s.path.name + (isWin ? '<span class="win-badge">Recommended</span>' : '') + '</div>' +
+          '<div class="score-track"><div class="score-fill" style="width:' + pct + '%"></div></div>' +
+          '<div class="score-figure mono">' + fmtMoney(s.score) + '</div>' +
+        '</div>' +
+        '<div class="score-breakdown">Financial <b>' + fmtDelta(s.net) + '</b> &nbsp;+&nbsp; Time <b>' + s.path.timeLost + 'h × $' + profile.weight + '/hr = ' + fmtMoney(s.timeCost) + '</b></div>';
+      scoreList.appendChild(item);
+    });
+
+    var wp = winner.path;
+    var netText = winner.net === 0 ? 'breaks even financially' : (winner.net < 0 ? ('nets ' + fmtMoney(winner.net) + ' saved overall') : ('costs ' + fmtMoney(winner.net) + ' net'));
+    var gap = Math.round(runnerUp.score - winner.score);
+    explainBox.innerHTML = '<strong>' + wp.name + ' is recommended</strong> for a ' + profile.name.toLowerCase() + ' traveler (' + profile.desc + '). It ' + netText + ' once fare and downstream impact are combined, and costs ' + wp.timeLost + ' extra hour' + (wp.timeLost===1?'':'s') + ' — giving a personalized score of <strong>' + fmtMoney(winner.score) + '</strong>, $' + gap + ' better than ' + runnerUp.path.name + ', the next-best option for this profile.';
+
+    notifMsg.innerHTML = 'Your SIN→NRT flight was cancelled. We recommend <strong>' + wp.name + '</strong> — ' + NOTIF_CLAUSE[wp.id] + '. See other options below.';
+  }
+
+  renderScores();
+</script>
