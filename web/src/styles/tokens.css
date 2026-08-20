@@ -1,0 +1,99 @@
+/* Design tokens — American Express.
+   Values are taken verbatim from DESIGN.md; the only additions are the soft
+   status tints, which are derived so semantic colors can carry a surface as well
+   as text. Nothing in the app should hardcode a hex value outside this file. */
+
+:root {
+  /* Brand blue: action and identity */
+  --primary: #006FCF;
+  --primary-hover: #1374D4;
+  --primary-pressed: #00509E;
+  --on-primary: #FFFFFF;
+
+  /* Premium navy: hero and membership surfaces */
+  --navy: #00175A;
+  --navy-deep: #000C3D;
+
+  /* Light surface system */
+  --canvas: #FFFFFF;
+  --surface-1: #F7F8F9;
+  --surface-2: #ECEDEE;
+  --border: #D5D9DC;
+  --border-subtle: #ECEDEE;
+
+  /* Text on light */
+  --ink: #1A1A1A;
+  --ink-muted: #53565A;
+  --ink-subdued: #86888C;
+
+  /* Text on navy */
+  --ink-on-navy: #FFFFFF;
+  --ink-on-navy-muted: #B7C3D9;
+
+  /* Premium accent — tier signaling only, never text */
+  --gold: #BF9B30;
+
+  /* Semantic */
+  --success: #00875A;
+  --warning: #B95000;
+  --error: #C52720;
+
+  /* Derived tints for semantic surfaces */
+  --primary-soft: #E7F1FB;
+  --success-soft: #E4F2EC;
+  --warning-soft: #FAEEE6;
+  --error-soft: #FAE9E8;
+  --gold-soft: #F6F1E3;
+
+  /* Spacing — 8px base */
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 24px;
+  --space-6: 32px;
+  --space-7: 48px;
+  --space-8: 64px;
+  --space-9: 96px;
+  --space-10: 128px;
+
+  /* Radius */
+  --radius-sm: 4px;
+  --radius-md: 8px;
+  --radius-lg: 12px;
+  --radius-pill: 9999px;
+
+  /* Elevation */
+  --shadow-card: 0 1px 4px rgba(0, 23, 90, 0.10);
+  --shadow-elevated: 0 6px 24px rgba(0, 23, 90, 0.16);
+
+  /* Motion */
+  --duration-fast: 120ms;
+  --duration-base: 240ms;
+  --easing: cubic-bezier(0.4, 0, 0.2, 1);
+
+  /* Type */
+  --font-sans: "Benton Sans", "Helvetica Neue", Helvetica, Arial, sans-serif;
+  --text-display: clamp(28px, 4.4vw, 40px);
+  --text-title: clamp(21px, 2.4vw, 26px);
+  --text-section: 18px;
+  --text-body: 16px;
+  --text-sm: 14px;
+  --text-xs: 12px;
+
+  /* Layout */
+  --measure: 1080px;
+  --gutter: 16px;
+}
+
+@media (min-width: 720px) {
+  :root {
+    --gutter: 32px;
+  }
+}
+
+@media (min-width: 1120px) {
+  :root {
+    --gutter: 48px;
+  }
+}

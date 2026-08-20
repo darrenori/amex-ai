@@ -1,0 +1,209 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#00175A">
+  <meta name="description" content="TripShield — whole-trip disruption recovery for American Express Card Members. An independent AMEX AI Hackathon 2026 concept.">
+  <title>TripShield · AMEX Travel</title>
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%23006FCF'/%3E%3Ctext x='16' y='22' font-family='Helvetica,Arial' font-size='15' font-weight='700' fill='%23fff' text-anchor='middle'%3ETS%3C/text%3E%3C/svg%3E">
+</head>
+<body>
+  <a class="skip-link" href="#main">Skip to main content</a>
+
+  <div class="app" id="app">
+
+    <!-- ============ Login ============ -->
+    <section class="view is-active" id="view-login" aria-labelledby="loginHeading">
+      <div class="hero on-navy">
+        <div class="hero-scene" aria-hidden="true">
+          <svg viewBox="0 0 1600 900" preserveAspectRatio="xMidYMid slice" role="presentation" focusable="false">
+            <defs>
+              <linearGradient id="horizon" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="0" stop-color="#3f6fb5" stop-opacity=".16"/>
+                <stop offset="1" stop-color="#b7c3d9" stop-opacity=".22"/>
+              </linearGradient>
+              <linearGradient id="runway" x1="0" y1="0" x2="1" y2="1">
+                <stop stop-color="#0a1c45"/><stop offset="1" stop-color="#000c3d"/>
+              </linearGradient>
+              <radialGradient id="lightGlow">
+                <stop stop-color="#e8f2ff" stop-opacity=".9"/>
+                <stop offset=".24" stop-color="#3f8fd8" stop-opacity=".55"/>
+                <stop offset="1" stop-color="#006FCF" stop-opacity="0"/>
+              </radialGradient>
+              <radialGradient id="goldGlow">
+                <stop stop-color="#f4e3ba" stop-opacity=".9"/>
+                <stop offset=".26" stop-color="#BF9B30" stop-opacity=".55"/>
+                <stop offset="1" stop-color="#BF9B30" stop-opacity="0"/>
+              </radialGradient>
+              <filter id="soft"><feGaussianBlur stdDeviation="6"/></filter>
+              <filter id="wide"><feGaussianBlur stdDeviation="18"/></filter>
+            </defs>
+
+            <rect x="0" y="430" width="1600" height="225" fill="url(#horizon)"/>
+            <g fill="#05123a">
+              <path d="M0 566h216v-21h75v-27h92v14h102v34h112v48H0z"/>
+              <path d="M1090 555h88v-37h148v19h163v-34h111v113h-510z"/>
+              <path d="M125 546v-43h7v43m68 0v-65h8v65m1118-28v-76h8v76m115 0v-52h7v52" stroke="#0a1c45" stroke-width="7"/>
+            </g>
+            <g fill="#b7c3d9" opacity=".7">
+              <rect x="235" y="551" width="22" height="5" rx="2"/><rect x="268" y="551" width="22" height="5" rx="2"/>
+              <rect x="329" y="540" width="25" height="5" rx="2"/><rect x="1204" y="528" width="27" height="5" rx="2"/>
+              <rect x="1243" y="528" width="27" height="5" rx="2"/><rect x="1395" y="547" width="25" height="5" rx="2"/>
+            </g>
+            <g><circle cx="1329" cy="441" r="28" fill="url(#goldGlow)"/><circle cx="1329" cy="441" r="2" fill="#f4e3ba"/></g>
+
+            <path d="M0 606H1600V900H0z" fill="#04102f"/>
+            <path d="M940 590L1550 900H478L786 590z" fill="url(#runway)"/>
+            <path d="M793 590L490 900" stroke="#b7c3d9" stroke-opacity=".2" stroke-width="2"/>
+            <path d="M932 590L1530 900" stroke="#b7c3d9" stroke-opacity=".2" stroke-width="2"/>
+            <g fill="#dbe4f2" opacity=".5"><path d="M859 612h14l13 28h-29z"/><path d="M847 664h28l23 50h-60z"/><path d="M822 760h54l47 103H779z"/></g>
+            <ellipse cx="1014" cy="757" rx="350" ry="72" fill="#006FCF" opacity=".16" filter="url(#wide)"/>
+
+            <g>
+              <circle cx="785" cy="606" r="16" fill="url(#lightGlow)"/><circle cx="764" cy="629" r="18" fill="url(#lightGlow)"/>
+              <circle cx="734" cy="664" r="21" fill="url(#lightGlow)"/><circle cx="688" cy="717" r="26" fill="url(#lightGlow)"/>
+              <circle cx="620" cy="797" r="34" fill="url(#lightGlow)"/>
+              <circle cx="946" cy="606" r="16" fill="url(#goldGlow)"/><circle cx="984" cy="629" r="18" fill="url(#goldGlow)"/>
+              <circle cx="1042" cy="664" r="21" fill="url(#goldGlow)"/><circle cx="1131" cy="717" r="26" fill="url(#goldGlow)"/>
+              <circle cx="1265" cy="797" r="34" fill="url(#goldGlow)"/>
+            </g>
+
+            <g transform="translate(700 300) rotate(-4)">
+              <ellipse cx="132" cy="142" rx="175" ry="19" fill="#000c3d" opacity=".4" filter="url(#soft)"/>
+              <path d="M18 87c18-6 72-12 161-11 47 0 88 4 119 10 13 3 25 10 33 18-48 8-103 13-170 13-73 0-120-8-145-15-8-3-7-12 2-15z" fill="#eef2f8"/>
+              <path d="M18 87c59-8 141-10 268-2l14 2c-53 5-152 9-284 15-8-3-7-12 2-15z" fill="#cbd5e6"/>
+              <path d="M177 77l-21-18 16-2 48 22z" fill="#e6ecf5"/>
+              <path d="M110 79L50 22l18-4 111 62z" fill="#f5f8fc"/>
+              <path d="M113 106L56 162l21 3 105-55z" fill="#d5dfee"/>
+              <path d="M290 86l23-42 15 3 2 58z" fill="#e6ecf5"/>
+              <path d="M292 87l37-27 2 15-16 27z" fill="#c3cee2"/>
+              <path d="M33 88c-11 2-20 7-27 13 10 4 22 6 35 7z" fill="#d5dfee"/>
+              <path d="M244 85c25 1 47 2 64 5" fill="none" stroke="#006FCF" stroke-width="4"/>
+              <g fill="#00175A"><circle cx="204" cy="89" r="2.2"/><circle cx="215" cy="89" r="2.2"/><circle cx="226" cy="90" r="2.2"/><circle cx="237" cy="90" r="2.2"/></g>
+              <path d="M38 101c82 13 189 10 276-2" fill="none" stroke="#006FCF" stroke-width="2" opacity=".7"/>
+              <g><circle cx="67" cy="20" r="22" fill="url(#goldGlow)"/><circle cx="67" cy="20" r="2" fill="#f4e3ba"/></g>
+              <g><circle cx="316" cy="102" r="19" fill="url(#lightGlow)"/><circle cx="316" cy="102" r="2" fill="#eef2f8"/></g>
+            </g>
+          </svg>
+        </div>
+
+        <div class="wrap">
+          <div class="hero-grid">
+            <div class="hero-copy">
+              <a class="brand" href="#" aria-label="AMEX Travel, TripShield home">
+                <span class="brand-mark" aria-hidden="true">TS</span>
+                <span class="brand-name">
+                  <strong>TripShield</strong>
+                  <span>AMEX Travel</span>
+                </span>
+              </a>
+              <p class="eyebrow" style="margin-top:32px">Arrive with confidence</p>
+              <h1 id="loginHeading">Your journey continues here.</h1>
+              <p>When one booking fails, the rest of the trip is still on your Card. TripShield prices the disruption against the whole journey — flight, hotel and car rental together — and rebooks the way you actually decide.</p>
+              <div class="hero-badges">
+                <span class="hero-badge">Whole-trip recovery</span>
+                <span class="hero-badge">Personalized to your history</span>
+                <span class="hero-badge">One decision, already made</span>
+              </div>
+              <p style="margin-top:24px"><span class="concept-badge">Hackathon concept · not a live Amex service</span></p>
+            </div>
+
+            <div class="login-card">
+              <p class="eyebrow">Welcome back</p>
+              <h2 style="margin-top:8px;font-size:var(--text-title)">Log in to your account</h2>
+              <p class="muted" style="margin-top:8px;font-size:var(--text-sm)">Your next trip and membership benefits are ready when you are.</p>
+
+              <form id="loginForm" novalidate style="margin-top:24px">
+                <div class="field">
+                  <label for="email">Email or User ID</label>
+                  <div class="input-wrap">
+                    <input id="email" name="email" type="email" autocomplete="username" inputmode="email" aria-describedby="emailError" aria-invalid="false">
+                  </div>
+                  <span class="field-error" id="emailError"></span>
+                </div>
+
+                <div class="field">
+                  <label for="password">Password</label>
+                  <div class="input-wrap has-toggle">
+                    <input id="password" name="password" type="password" autocomplete="current-password" aria-describedby="passwordError" aria-invalid="false">
+                    <button class="show-password" id="togglePassword" type="button" aria-pressed="false">Show</button>
+                  </div>
+                  <span class="field-error" id="passwordError"></span>
+                </div>
+
+                <div class="form-row">
+                  <label class="remember" for="remember"><input id="remember" type="checkbox"> Remember me</label>
+                  <a href="#" id="forgotLink">Forgot password?</a>
+                </div>
+
+                <button class="btn btn-primary btn-block" id="loginButton" type="submit">
+                  <span class="spinner" aria-hidden="true" hidden></span>
+                  <span id="loginButtonText">Log in</span>
+                </button>
+
+                <p class="or" aria-hidden="true">or</p>
+                <button class="btn btn-ghost btn-block" id="createAccount" type="button">Create an account</button>
+
+                <p class="demo-credentials">
+                  <strong>Demo credentials</strong><br>
+                  demo@amextravel.com · Travel123!
+                </p>
+                <p class="secure-note">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><rect x="4" y="10" width="16" height="11" rx="2"/><path d="M8 10V7a4 4 0 0 1 8 0v3"/></svg>
+                  Your information is protected with secure encryption
+                </p>
+                <p class="sr-only" id="formStatus" role="status" aria-live="polite"></p>
+              </form>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============ Signed-in application ============ -->
+    <section class="view" id="view-app" aria-hidden="true">
+      <header class="appbar">
+        <div class="wrap appbar-inner">
+          <a class="brand" href="#" id="homeLink" aria-label="TripShield home">
+            <span class="brand-mark" aria-hidden="true">TS</span>
+            <span class="brand-name">
+              <strong>TripShield</strong>
+              <span>AMEX Travel</span>
+            </span>
+          </a>
+          <div class="appbar-actions">
+            <span class="chip chip-neutral" id="memberChip" hidden></span>
+            <button class="btn btn-quiet" id="restartButton" type="button">Restart demo</button>
+          </div>
+        </div>
+      </header>
+
+      <main class="page" id="main" tabindex="-1">
+        <div class="wrap">
+          <div id="accountView" class="stack-lg"></div>
+          <div id="recoveryView" class="stack-lg" hidden></div>
+        </div>
+      </main>
+
+      <footer class="app-footer">
+        <div class="wrap">
+          <p><strong>TripShield</strong> is an independent concept prepared for the AMEX AI Hackathon 2026. It is not an official American Express product or service, and is not affiliated with or endorsed by American Express.</p>
+          <p>All flight numbers, prices, timings, merchants and preference weights on this page are synthetic and built for demonstration only — not live data or confirmed commercial partnerships. No real purchase, cancellation, refund or claim is made.</p>
+        </div>
+      </footer>
+    </section>
+  </div>
+
+  <div class="modal-overlay" id="modalOverlay" hidden>
+    <div class="modal-panel" id="modalPanel" role="dialog" aria-modal="true" aria-labelledby="modalTitle" tabindex="-1">
+      <button class="modal-close" id="modalClose" type="button" aria-label="Close dialog">×</button>
+      <div id="modalContent"></div>
+    </div>
+  </div>
+
+  <p class="sr-only" id="liveStatus" role="status" aria-live="polite"></p>
+
+  <script type="module" src="/src/main.js"></script>
+</body>
+</html>

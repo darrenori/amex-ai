@@ -1,0 +1,16 @@
+{
+  "name": "amex-ai",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "description": "TripShield — whole-trip disruption recovery for American Express Card Members. AMEX AI Hackathon 2026 concept.",
+  "scripts": {
+    "dev": "vite",
+    "dev:api": "uvicorn api.index:app --reload --port 8000",
+    "build": "vite build",
+    "preview": "vite preview"
+  },
+  "devDependencies": {
+    "vite": "^7.1.5"
+  }
+}
