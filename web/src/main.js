@@ -1,8 +1,11 @@
-// Application bootstrap: login, view switching, and the two rendered views.
+// Application bootstrap: login, view switching, and the two top-level views —
+// the calm account overview, and the recovery console that takes over when a
+// trip breaks.
 
 import './styles/tokens.css';
 import './styles/base.css';
 import './styles/app.css';
+import './styles/console.css';
 
 import { api } from './api.js';
 import { escapeHtml } from './format.js';
@@ -172,24 +175,17 @@ function showAccount() {
   announce('Returned to the account overview.');
 }
 
-async function showRecovery() {
-  try {
-    const payload = await api.simulate(session.profiles[0]?.id ?? 'time');
-    dom.accountView.hidden = true;
-    dom.recoveryView.hidden = false;
-    session.stopRecovery = renderRecovery(dom.recoveryView, {
-      payload,
-      profiles: session.profiles,
-      onBack: showAccount,
-      announce,
-    });
-    window.scrollTo({ top: 0, behavior: reducedMotion.matches ? 'auto' : 'smooth' });
-    announce('Flight SQ638 has been cancelled. Three recovery paths are ready to review.');
-  } catch (error) {
-    dom.accountView.hidden = true;
-    dom.recoveryView.hidden = false;
-    showBanner(dom.recoveryView, error.message);
-  }
+function showRecovery() {
+  dom.accountView.hidden = true;
+  dom.recoveryView.hidden = false;
+  session.stopRecovery = renderRecovery(dom.recoveryView, {
+    profiles: session.profiles,
+    currency: session.account.currency,
+    onBack: showAccount,
+    announce,
+  });
+  window.scrollTo({ top: 0, behavior: reducedMotion.matches ? 'auto' : 'smooth' });
+  announce('Opening the recovery console. Stage one sweeps your flights for a disruption.');
 }
 
 function enterApp() {
@@ -201,7 +197,7 @@ function enterApp() {
 
   renderAccount(dom.accountView, {
     data: session.account,
-    onSimulate: showRecovery,
+    onCheckFlights: showRecovery,
     announce,
   });
 
@@ -217,6 +213,9 @@ dom.restartButton.addEventListener('click', () => {
     session.stopRecovery();
     session.stopRecovery = null;
   }
+  // Clear the server-side session too, so the next run starts from a trip with
+  // nothing detected rather than inheriting this one's disruption and run.
+  api.reset().catch(() => {});
   closeModal(false);
   dom.appView.classList.remove('is-active');
   dom.appView.setAttribute('aria-hidden', 'true');

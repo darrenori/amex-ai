@@ -4,6 +4,11 @@
 
 const BASE = '/api';
 
+// One session per browser tab. Execution runs are keyed off it server-side,
+// because a run records transactions that actually happened and must not be
+// reconstructed from seed data.
+export const SESSION_ID = `s_${Math.random().toString(36).slice(2, 10)}`;
+
 export class ApiError extends Error {
   constructor(message, status) {
     super(message);
@@ -36,19 +41,65 @@ async function request(path, { method = 'GET', body } = {}) {
   return payload;
 }
 
+const q = (params) =>
+  Object.entries(params)
+    .filter(([, value]) => value !== undefined && value !== null)
+    .map(([key, value]) => `${key}=${encodeURIComponent(value)}`)
+    .join('&');
+
 export const api = {
   health: () => request('/health'),
   login: (email, password) => request('/auth/login', { method: 'POST', body: { email, password } }),
-  account: () => request('/account'),
+
+  // Account
+  account: () => request(`/account?${q({ session_id: SESSION_ID })}`),
+  bookings: () => request(`/bookings?${q({ session_id: SESSION_ID })}`),
   benefits: () => request('/benefits'),
   profiles: () => request('/profiles'),
-  simulate: (profileId = 'time') =>
-    request(`/disruption/simulate?profile_id=${encodeURIComponent(profileId)}`, { method: 'POST' }),
-  recovery: (profileId = 'time') => request(`/recovery?profile_id=${encodeURIComponent(profileId)}`),
-  hold: (planId) => request('/recovery/hold', { method: 'POST', body: { plan_id: planId } }),
-  confirm: (planId, profileId, emergency = false) =>
-    request('/recovery/confirm', {
+  connectors: () => request('/connectors'),
+
+  // 1 · detection
+  flightStatus: (flight, date) => request(`/flights/status?${q({ flight, date })}`),
+  detect: () => request(`/disruption/detect?${q({ session_id: SESSION_ID })}`, { method: 'POST' }),
+
+  // 2–3 · graph and impact
+  graph: () => request(`/graph?${q({ session_id: SESSION_ID })}`),
+
+  // 4–7 · planning
+  plan: (priority = 'inferred', profileId = 'time') =>
+    request('/recovery/plan', {
       method: 'POST',
-      body: { plan_id: planId, profile_id: profileId, emergency },
+      body: { session_id: SESSION_ID, priority, profile_id: profileId },
     }),
+  rank: (priority, profileId = 'time') =>
+    request(`/recovery/rank?${q({ session_id: SESSION_ID, priority, profile_id: profileId })}`),
+  validate: (selections, { priority = 'inferred', profileId = 'time', basePlanId = null } = {}) =>
+    request('/recovery/plan/validate', {
+      method: 'POST',
+      body: {
+        session_id: SESSION_ID,
+        selections,
+        priority,
+        profile_id: profileId,
+        base_plan_id: basePlanId,
+      },
+    }),
+
+  // 9–12 · approval, execution, compensation
+  approve: (planId) =>
+    request('/recovery/plan/approve', { method: 'POST', body: { session_id: SESSION_ID, plan_id: planId } }),
+  run: (runId) => request(`/execution/${runId}?${q({ session_id: SESSION_ID })}`),
+  advance: (runId, approvePayment = false) =>
+    request(`/execution/${runId}/advance`, {
+      method: 'POST',
+      body: { session_id: SESSION_ID, approve_payment: approvePayment },
+    }),
+  rollbackQuote: (runId) => request(`/execution/${runId}/rollback-quote?${q({ session_id: SESSION_ID })}`),
+  cancelRun: (runId, rollback = false) =>
+    request(`/execution/${runId}/cancel`, {
+      method: 'POST',
+      body: { session_id: SESSION_ID, rollback },
+    }),
+
+  reset: () => request(`/session/reset?${q({ session_id: SESSION_ID })}`, { method: 'POST' }),
 };

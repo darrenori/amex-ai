@@ -6,22 +6,23 @@ import { escapeHtml, money, points } from '../format.js';
 import { icons } from '../icons.js';
 import { openModal } from '../components/modal.js';
 
-function componentBlock(component, currency) {
+function componentBlock(booking, currency) {
   return `
     <section class="detail-block">
-      <h4>${escapeHtml(component.label)}</h4>
-      <div class="detail-line"><span>Booking</span><strong>${escapeHtml(component.title)}</strong></div>
-      <div class="detail-line"><span>Detail</span><strong>${escapeHtml(component.detail)}</strong></div>
-      <div class="detail-line"><span>Charged</span><strong>${money(component.amount, currency)}</strong></div>
+      <h4>${escapeHtml(booking.label)}</h4>
+      <div class="detail-line"><span>Booking</span><strong>${escapeHtml(booking.title)}</strong></div>
+      <div class="detail-line"><span>Detail</span><strong>${escapeHtml(booking.detail)}</strong></div>
+      <div class="detail-line"><span>Supplier</span><strong>${escapeHtml(booking.supplier)}</strong></div>
+      <div class="detail-line"><span>Charged</span><strong>${money(booking.amount, currency)}</strong></div>
     </section>`;
 }
 
 function costBlock(trip, currency) {
-  const lines = trip.components
-    .map((component) => `
+  const lines = trip.bookings
+    .map((booking) => `
       <div class="detail-line">
-        <span>${escapeHtml(component.label)}</span>
-        <strong>${money(component.amount, currency)}</strong>
+        <span>${escapeHtml(booking.label)}</span>
+        <strong>${money(booking.amount, currency)}</strong>
       </div>`)
     .join('');
 
@@ -29,6 +30,7 @@ function costBlock(trip, currency) {
     <section class="detail-block">
       <h4>Cost summary · ${escapeHtml(currency)}</h4>
       ${lines}
+      <div class="detail-line"><span>Taxes and fees</span><strong>${money(trip.taxes_and_fees, currency)}</strong></div>
       <div class="detail-line total"><span>Total trip cost</span><strong>${money(trip.total, currency)}</strong></div>
     </section>`;
 }
@@ -45,11 +47,10 @@ function transactionRow(txn, currency) {
     </li>`;
 }
 
-export function renderAccount(container, { data, onSimulate, announce }) {
+export function renderAccount(container, { data, onCheckFlights, announce }) {
   const { member, trip, transactions, benefits, currency } = data;
-  const bookingBlocks = trip.components
-    .filter((component) => component.kind !== 'fees')
-    .map((component) => componentBlock(component, currency))
+  const bookingBlocks = trip.bookings
+    .map((booking) => componentBlock(booking, currency))
     .join('');
 
   container.innerHTML = `
@@ -97,6 +98,8 @@ export function renderAccount(container, { data, onSimulate, announce }) {
             <span class="route-code">${escapeHtml(trip.origin.code)}</span>
             <span class="route-line" aria-hidden="true"></span>
             <span class="route-code">${escapeHtml(trip.destination.code)}</span>
+            <span class="route-line" aria-hidden="true"></span>
+            <span class="route-code">${escapeHtml(trip.onward.code)}</span>
           </div>
         </div>
         <span class="chip chip-good"><span class="dot"></span>Confirmed</span>
@@ -105,8 +108,8 @@ export function renderAccount(container, { data, onSimulate, announce }) {
       <button class="trip-toggle" id="tripToggle" type="button" aria-expanded="false" aria-controls="tripPanel">
         <span class="icon-badge" aria-hidden="true">${icons.plane}</span>
         <span>
-          <span style="display:block;font-weight:600;font-size:var(--text-sm)">${escapeHtml(trip.origin.city)} → ${escapeHtml(trip.destination.city)}</span>
-          <span style="display:block;font-size:var(--text-xs);color:var(--ink-muted)">${escapeHtml(trip.dates)} · ${escapeHtml(trip.cabin)} · ${trip.nights} nights · ${money(trip.total, currency)}</span>
+          <span style="display:block;font-weight:600;font-size:var(--text-sm)">${escapeHtml(trip.origin.city)} → ${escapeHtml(trip.destination.city)} → ${escapeHtml(trip.onward.city)}</span>
+          <span style="display:block;font-size:var(--text-xs);color:var(--ink-muted)">${escapeHtml(trip.dates)} · ${escapeHtml(trip.cabin)} · ${trip.bookings.length} bookings · ${money(trip.total, currency)}</span>
         </span>
         <span class="expand" aria-hidden="true">${icons.chevron}</span>
       </button>
@@ -139,12 +142,14 @@ export function renderAccount(container, { data, onSimulate, announce }) {
           <span class="icon-badge" aria-hidden="true">${icons.shield}</span>
         </div>
         <p class="muted" style="margin-top:12px;font-size:var(--text-sm)">
-          Flight, hotel and car rental for this trip were all charged to ${escapeHtml(member.card_label)}.
-          That is what lets TripShield price a disruption against the whole journey instead of one booking.
+          All ${trip.bookings.length} bookings on this trip — flights, both hotels, the airport transfer, the
+          park passport and the dinner reservation — went on ${escapeHtml(member.card_label)}.
+          That single fact is what lets TripShield reconstruct the dependencies between them and price
+          a disruption against the whole journey instead of one booking.
         </p>
         <div class="disruption-cta" style="margin-top:24px">
-          <p class="subdued">Run the demonstration scenario.</p>
-          <button class="btn btn-primary" id="simulateButton" type="button">Simulate cancellation</button>
+          <p class="subdued">Sweep this trip for disruption.</p>
+          <button class="btn btn-primary" id="checkFlightsButton" type="button">Check my flights</button>
         </div>
       </section>
     </div>
@@ -190,5 +195,5 @@ export function renderAccount(container, { data, onSimulate, announce }) {
 
   container.querySelector('#benefitsButton').addEventListener('click', showBenefits);
   container.querySelector('#benefitsButtonAlt').addEventListener('click', showBenefits);
-  container.querySelector('#simulateButton').addEventListener('click', onSimulate);
+  container.querySelector('#checkFlightsButton').addEventListener('click', onCheckFlights);
 }
