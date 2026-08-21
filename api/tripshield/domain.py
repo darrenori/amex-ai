@@ -264,6 +264,8 @@ class Option:
     quality: float               # 0–1, the agent's own comfort with the option
     drops_booking: bool = False  # removes the booking from the trip rather than moving it
     optional: bool = False       # an *addition* (a transit hotel), not a replacement
+    reliability_risk: float = 0.05
+    links: List[Dict[str, str]] = field(default_factory=list)
     notes: List[str] = field(default_factory=list)
     tool_call: str = ""          # the MCP call that produced it, shown in the trace
 
@@ -289,6 +291,8 @@ class Option:
             "quality": self.quality,
             "drops_booking": self.drops_booking,
             "optional": self.optional,
+            "reliability_risk": self.reliability_risk,
+            "links": self.links,
             "notes": self.notes,
             "tool_call": self.tool_call,
         }
@@ -331,6 +335,11 @@ class PlanMetrics:
     # money figure the member can reconcile against a statement.
     experience_lost: float = 0.0
     bookings_dropped: int = 0
+    # Probability that at least one leg of this plan fails on the day. Combined
+    # across the chosen options rather than read off the flight alone: a plan
+    # that hangs on the last train of the night is fragile even behind a direct
+    # flight.
+    reliability_risk: float = 0.0
 
     def public(self) -> Dict[str, Any]:
         return {
@@ -342,6 +351,7 @@ class PlanMetrics:
             "arrival": self.arrival.isoformat() if self.arrival else None,
             "experience_lost": self.experience_lost,
             "bookings_dropped": self.bookings_dropped,
+            "reliability_risk": self.reliability_risk,
         }
 
 

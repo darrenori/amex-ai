@@ -346,6 +346,9 @@ export function renderRecovery(container, { profiles, currency, onBack, announce
 
   // -- stage 5 -----------------------------------------------------------
 
+  const optionsById = () =>
+    Object.fromEntries((state.planning?.options ?? []).map((o) => [o.id, o]));
+
   function paintExecute() {
     if (!state.run) {
       body.innerHTML = `
@@ -366,7 +369,7 @@ export function renderRecovery(container, { profiles, currency, onBack, announce
           <em>Undo everything</em> asks each supplier what it would actually give back first.
         </p>
       </div>
-      ${runMarkup(state.run, currency)}`;
+      ${runMarkup(state.run, currency, optionsById())}`;
 
     const advance = body.querySelector('#advanceRun');
     if (advance) advance.addEventListener('click', onAdvance);

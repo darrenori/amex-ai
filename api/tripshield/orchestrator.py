@@ -54,6 +54,13 @@ NOW = datetime(2026, 9, 18, 6, 2, tzinfo=SGT)
 
 STRATEGIES = ("time", "cost", "disruption", "balanced")
 
+# Consumer surplus on a booked experience, as a multiple of what was paid. A
+# purchase reveals willingness-to-pay at or above the price, never below it, so
+# valuing the loss at exactly the price systematically under-prices giving it up.
+# 1.5 is a stated assumption rather than a measurement — it is here as one number
+# to argue with instead of an implicit 1.0 buried in a sum.
+EXPERIENCE_SURPLUS = 1.5
+
 
 # ---------------------------------------------------------------------------
 # 1 · Detection
@@ -325,16 +332,37 @@ def materialize(
     arrival = root.end if root else None
     hours_lost = root.hours_lost if root else 0.0
 
+    # Fragility compounds. A plan is only as reliable as the product of its legs
+    # holding, so a direct flight followed by the last train of the night is not
+    # a low-risk plan just because the flight is.
+    #
+    # Released bookings are *not* excluded from this product. Giving up the
+    # reserved transfer does not make the evening more reliable — it means the
+    # member is now on an unmanaged fallback, and that fallback carries its own
+    # risk, which is what the option's own figure encodes. Excluding them would
+    # make "cancel everything" read as the most dependable plan available.
+    survival = 1.0
+    for option in chosen.values():
+        survival *= (1.0 - min(max(option.reliability_risk, 0.0), 1.0))
+    reliability_risk = 1.0 - survival
+
     # Things bought for their own sake and then given up. Instrumental bookings
     # — a transfer, a room — are not counted: losing the train is not losing an
     # experience, it is losing a means, and the graph already prices whether the
     # member can still get where they were going.
-    experience_lost = sum(
+    #
+    # Valued at a premium over the price paid, not at the price paid. Someone who
+    # buys a park passport at SGD 80 has revealed they value the day at *at
+    # least* SGD 80 — pricing the loss at exactly SGD 80 makes the refund
+    # perfectly cancel it out, so the optimizer reads "delete the day, take the
+    # money back" as free. It is not free; that is the whole reason they bought
+    # the ticket. EXPERIENCE_SURPLUS is the assumption made explicit.
+    given_up = sum(
         itinerary.bookings[bid].amount
         for bid in dropped
         if itinerary.bookings[bid].kind in (BookingKind.ACTIVITY, BookingKind.DINING)
     )
-    experience_lost += sum(
+    given_up += sum(
         itinerary.bookings[bid].amount
         for bid, verdict in verdicts.items()
         if bid not in chosen
@@ -342,6 +370,7 @@ def materialize(
         and bid in itinerary.bookings
         and itinerary.bookings[bid].kind in (BookingKind.ACTIVITY, BookingKind.DINING)
     )
+    experience_lost = given_up * EXPERIENCE_SURPLUS
 
     plan = RecoveryPlan(
         id=plan_id,
@@ -359,6 +388,7 @@ def materialize(
             arrival=arrival,
             experience_lost=round(experience_lost, 2),
             bookings_dropped=len(dropped),
+            reliability_risk=round(reliability_risk, 4),
         ),
         violations=violations,
         origin=origin,

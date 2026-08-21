@@ -24,6 +24,7 @@ flight's status is free and read-only.
 from __future__ import annotations
 
 import secrets
+from dataclasses import fields
 from datetime import datetime
 from typing import Any, Dict, List, Optional
 
@@ -31,7 +32,7 @@ from fastapi import FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 
-from .tripshield import agents, catalog, connectors, execution, optimizer, orchestrator, store
+from .tripshield import agents, catalog, connectors, execution, explain, optimizer, orchestrator, store
 from .tripshield.catalog import CURRENCY, DEMO_CREDENTIALS, DISCLAIMER, MEMBER
 from .tripshield.domain import BookingKind, Option, Priority
 
@@ -256,12 +257,27 @@ async def build_plan(payload: PlanRequest) -> Dict[str, Any]:
     )
 
     session.catalogue = {o.id: o for o in _options_from(result)}
-    session.plans = {}
     session.last_planning = result
-    for public_plan in result["plans"]:
-        session.plans[public_plan["id"]] = _rehydrate(session, public_plan)
+    session.priority = payload.priority
+    session.profile_id = payload.profile_id
+    session.plans = {p["id"]: _rehydrate(session, p) for p in result["plans"]}
 
-    return {**result, "currency": CURRENCY, "disclaimer": DISCLAIMER, "session_id": session.id}
+    # Rank the *stored* objects, not the throwaway ones the orchestrator built.
+    # `materialize` deliberately does not score or mark the Pareto front — that
+    # is the optimizer's job — so a rehydrated plan starts unscored. Ranking here
+    # both fills those fields in and guarantees the ranking the client is shown
+    # describes the exact objects a later approval will read.
+    ranking = optimizer.rank(list(session.plans.values()), payload.priority, payload.profile_id)
+    session.last_ranking = ranking
+
+    return {
+        **result,
+        "plans": [p.public() for p in session.plans.values()],
+        "ranking": ranking,
+        "currency": CURRENCY,
+        "disclaimer": DISCLAIMER,
+        "session_id": session.id,
+    }
 
 
 @app.get(f"{API}/recovery/rank")
@@ -278,6 +294,9 @@ def rerank(
 
     plans = list(session.plans.values())
     ranking = optimizer.rank(plans, priority, profile_id)
+    session.last_ranking = ranking
+    session.priority = priority
+    session.profile_id = profile_id
     return {
         "currency": CURRENCY,
         "plans": [p.public() for p in plans],
@@ -362,7 +381,48 @@ def approve(payload: ApproveRequest) -> Dict[str, Any]:
 
     run = execution.build_run(session.itinerary, plan, session.catalogue)
     session.runs[run.id] = run
-    return {"currency": CURRENCY, "run": run.public(), "disclaimer": DISCLAIMER}
+
+    # Written at approval, not at execution. The question worth answering months
+    # later is usually "why was this offered", not "did the booking succeed".
+    ranking = session.last_ranking or {"recommended_plan_id": plan.id}
+    record = explain.audit_record(
+        event="plan_approved",
+        plan=plan,
+        all_plans=list(session.plans.values()),
+        ranking=ranking,
+        weights=optimizer.weights_for(session.priority, session.profile_id),
+        profile=catalog.PROFILES_BY_ID.get(session.profile_id),
+        trip_id=catalog.TRIP_META["id"],
+        member_id=MEMBER["name"],
+        run_id=run.id,
+    )
+    record["id"] = f"AUD-{len(session.audit) + 1:04d}"
+    session.audit.append(record)
+    run.log.append(
+        f"Audit {record['id']} written — "
+        + ("followed the recommendation." if record["followed_recommendation"]
+           else f"member chose {plan.name} over the recommended {ranking.get('recommended_plan_id')}.")
+    )
+
+    return {
+        "currency": CURRENCY,
+        "run": run.public(),
+        "audit": record,
+        "reason_codes": record["reason_codes"],
+        "disclaimer": DISCLAIMER,
+    }
+
+
+@app.get(f"{API}/audit")
+def audit_log(session_id: str = "demo") -> Dict[str, Any]:
+    """Every approval decision this session made, newest last.
+
+    Kept as its own endpoint because the audit trail is not part of any one
+    plan or run — it is the record of what was recommended versus what was
+    chosen, across all of them.
+    """
+    session = _session(session_id)
+    return {"records": session.audit, "model_versions": explain.MODEL_VERSIONS}
 
 
 @app.get(f"{API}/execution/{{run_id}}")
@@ -412,35 +472,37 @@ def reset(session_id: str = "demo") -> Dict[str, Any]:
 # Helpers
 # ---------------------------------------------------------------------------
 
-def _options_from(result: Dict[str, Any]) -> List[Any]:
+_OPTION_FIELDS = {f.name for f in fields(Option)}
+_OPTION_COERCE = {
+    "kind": BookingKind,
+    "start": datetime.fromisoformat,
+    "end": datetime.fromisoformat,
+}
+
+
+def _options_from(result: Dict[str, Any]) -> List[Option]:
     """The orchestrator returns options as plain dicts for the wire; the session
-    keeps the objects so plans can be re-materialised without a second pass."""
-    options = []
+    keeps the objects so plans can be re-materialised without a second pass.
+
+    Rebuilt generically from the dataclass's own field list rather than a hand
+    written argument-by-argument copy. That copy is where a new field silently
+    picks up its default instead of its real value — which means the plan the
+    member approved would carry different numbers from the plan they were shown.
+    """
+    options: List[Option] = []
     for row in result["options"]:
-        options.append(Option(
-            id=row["id"],
-            task_id=row["task_id"],
-            booking_id=row["booking_id"],
-            kind=BookingKind(row["kind"]),
-            agent=row["agent"],
-            connector=row["connector"],
-            title=row["title"],
-            detail=row["detail"],
-            supplier=row["supplier"],
-            supplier_offer_id=row["supplier_offer_id"],
-            start=datetime.fromisoformat(row["start"]),
-            end=datetime.fromisoformat(row["end"]),
-            location=row["location"],
-            place_code=row["place_code"],
-            cost_delta=row["cost_delta"],
-            hours_lost=row["hours_lost"],
-            changes_booking=row["changes_booking"],
-            quality=row["quality"],
-            drops_booking=row["drops_booking"],
-            optional=row["optional"],
-            notes=row["notes"],
-            tool_call=row["tool_call"],
-        ))
+        payload = {
+            key: _OPTION_COERCE.get(key, lambda value: value)(value)
+            for key, value in row.items()
+            if key in _OPTION_FIELDS
+        }
+        missing = _OPTION_FIELDS - payload.keys()
+        if missing:
+            raise HTTPException(
+                status_code=500,
+                detail=f"Option payload is missing {sorted(missing)} — Option.public() is out of step.",
+            )
+        options.append(Option(**payload))
     return options
 
 

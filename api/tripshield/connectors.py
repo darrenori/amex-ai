@@ -246,6 +246,14 @@ class InventoryItem:
     # treat them as breakages, because giving something up on purpose must not
     # cascade into everything downstream of it.
     drops_booking: bool = False
+    # Probability this option itself fails to deliver — a missed connection, a
+    # timetable that has no fallback after it. Distinct from the graph's
+    # dependency checks, which ask whether the plan works *if everything runs*.
+    reliability_risk: float = 0.05
+    # Amex properties relevant to this step. Rendered as outbound links, and
+    # constrained to americanexpress.com over https at both ends: the allowlist
+    # in the renderer is the enforcement, this list is the content.
+    links: List[Dict[str, str]] = field(default_factory=list)
     meta: Dict[str, Any] = field(default_factory=dict)
 
 
@@ -354,6 +362,8 @@ def _flight_inventory() -> List[InventoryItem]:
                    "Arrives in time for the hotel's 23:59 desk cut-off."],
             meta={"hours_lost": 4.75, "stops": "Direct", "stops_status": "good", "cabin": "Business class"},
             **common,
+            reliability_risk=0.12,
+            links=[{"label": "View Terminal 3 lounge access", "url": "https://www.americanexpress.com/en-sg/travel/lounges/the-platinum-card/SIN/sats-premier-lounge-terminal3-RL47nYNPjn/"}],
         ),
         InventoryItem(
             id="opt_flt_nh802", offer_id="off_0000ANH802Qb7",
@@ -366,6 +376,8 @@ def _flight_inventory() -> List[InventoryItem]:
                    "Star Alliance — status and lounge access carry over."],
             meta={"hours_lost": 2.5, "stops": "Direct", "stops_status": "good", "cabin": "Business class"},
             **common,
+            reliability_risk=0.1,
+            links=[{"label": "View Terminal 3 lounge access", "url": "https://www.americanexpress.com/en-sg/travel/lounges/the-platinum-card/SIN/sats-premier-lounge-terminal3-RL47nYNPjn/"}],
         ),
         InventoryItem(
             id="opt_flt_cx715", offer_id="off_0000ACX715Rt1",
@@ -378,6 +390,8 @@ def _flight_inventory() -> List[InventoryItem]:
                    "Arrival is after the Disneyland passport date has started."],
             meta={"hours_lost": 26.6, "stops": "1 stop · HKG", "stops_status": "warn", "cabin": "Business class"},
             **common,
+            reliability_risk=0.28,
+            links=[{"label": "View Terminal 3 lounge access", "url": "https://www.americanexpress.com/en-sg/travel/lounges/the-platinum-card/SIN/sats-premier-lounge-terminal3-RL47nYNPjn/"}],
         ),
         InventoryItem(
             id="opt_flt_nh860", offer_id="off_0000ANH860Zz8",
@@ -390,6 +404,8 @@ def _flight_inventory() -> List[InventoryItem]:
                    "Writes off most of the Tokyo leg."],
             meta={"hours_lost": 46.0, "stops": "Direct", "stops_status": "good", "cabin": "Business class"},
             **common,
+            reliability_risk=0.18,
+            links=[{"label": "View Terminal 3 lounge access", "url": "https://www.americanexpress.com/en-sg/travel/lounges/the-platinum-card/SIN/sats-premier-lounge-terminal3-RL47nYNPjn/"}],
         ),
     ]
 
@@ -415,6 +431,8 @@ def _lodging_inventory() -> List[InventoryItem]:
             requires_payment=False,
             meta={"nights": 3},
             **tokyo,
+            reliability_risk=0.04,
+            links=[{"label": "Explore Amex hotels in Tokyo", "url": "https://www.americanexpress.com/en-sg/travel/discover/property-results/c/27/dt/4/d/Tokyo"}],
         ),
         InventoryItem(
             id="opt_lod_drop1", offer_id="rate_amend_9QR41K7_n2",
@@ -426,6 +444,8 @@ def _lodging_inventory() -> List[InventoryItem]:
             notes=["The forfeited night is eligible under trip interruption protection."],
             meta={"nights": 2, "forfeited": 300.0},
             **tokyo,
+            reliability_risk=0.06,
+            links=[{"label": "Explore Amex hotels in Tokyo", "url": "https://www.americanexpress.com/en-sg/travel/discover/property-results/c/27/dt/4/d/Tokyo"}, {"label": "Browse Love Dining hotel partners", "url": "https://www.americanexpress.com/sg/benefits/love-dining/love-dining-hotels.html"}],
         ),
         InventoryItem(
             id="opt_lod_drop2", offer_id="rate_amend_9QR41K7_n1",
@@ -437,6 +457,8 @@ def _lodging_inventory() -> List[InventoryItem]:
             notes=["Most of the Tokyo stay is written off."],
             meta={"nights": 1, "forfeited": 600.0},
             **tokyo,
+            reliability_risk=0.06,
+            links=[{"label": "Explore Amex hotels in Tokyo", "url": "https://www.americanexpress.com/en-sg/travel/discover/property-results/c/27/dt/4/d/Tokyo"}, {"label": "Browse Love Dining hotel partners", "url": "https://www.americanexpress.com/sg/benefits/love-dining/love-dining-hotels.html"}],
         ),
         InventoryItem(
             id="opt_lod_transit", offer_id="rate_new_CHG_TRANSIT",
@@ -454,6 +476,8 @@ def _lodging_inventory() -> List[InventoryItem]:
             place_code="SIN",
             action="lodging.book",
             compensating_action="lodging.cancel",
+            reliability_risk=0.08,
+            links=[{"label": "Search Amex Travel hotels", "url": "https://www.americanexpress.com/en-sg/travel/hotels/"}],
         ),
     ]
 
@@ -478,6 +502,8 @@ def _activity_inventory() -> List[InventoryItem]:
             notes=["Only viable if the member is in Tokyo the night before."],
             requires_payment=False,
             **common,
+            reliability_risk=0.03,
+            links=[{"label": "Explore Amex hotels in Tokyo", "url": "https://www.americanexpress.com/en-sg/travel/discover/property-results/c/27/dt/4/d/Tokyo"}],
         ),
         InventoryItem(
             id="opt_act_move20", offer_id="prod_TDL_1DAY_20",
@@ -488,6 +514,8 @@ def _activity_inventory() -> List[InventoryItem]:
             cost_delta=12.0, changes_booking=True, quality=0.93,
             notes=["Date change on a web passport carries a small re-issue fee."],
             **common,
+            reliability_risk=0.05,
+            links=[{"label": "Explore Amex hotels in Tokyo", "url": "https://www.americanexpress.com/en-sg/travel/discover/property-results/c/27/dt/4/d/Tokyo"}],
         ),
         InventoryItem(
             id="opt_act_move20pm", offer_id="prod_TDL_AFTER6_20",
@@ -498,6 +526,8 @@ def _activity_inventory() -> List[InventoryItem]:
             cost_delta=-34.0, changes_booking=True, quality=0.55,
             notes=["Cheaper than the full day, but four hours in the park instead of eleven."],
             **common,
+            reliability_risk=0.05,
+            links=[{"label": "Explore Amex hotels in Tokyo", "url": "https://www.americanexpress.com/en-sg/travel/discover/property-results/c/27/dt/4/d/Tokyo"}],
         ),
         InventoryItem(
             id="opt_act_refund", offer_id="cancel_BR-556320117",
@@ -510,6 +540,8 @@ def _activity_inventory() -> List[InventoryItem]:
             requires_payment=False,
             drops_booking=True,
             **common,
+            reliability_risk=0.0,
+            links=[{"label": "Explore Amex hotels in Tokyo", "url": "https://www.americanexpress.com/en-sg/travel/discover/property-results/c/27/dt/4/d/Tokyo"}],
         ),
     ]
 
@@ -533,6 +565,8 @@ def _dining_inventory() -> List[InventoryItem]:
             cost_delta=0.0, changes_booking=False, quality=1.0,
             requires_payment=False,
             **common,
+            reliability_risk=0.03,
+            links=[{"label": "Browse Love Dining restaurants", "url": "https://www.americanexpress.com/sg/benefits/love-dining/love-restaurants.html"}],
         ),
         InventoryItem(
             id="opt_din_late", offer_id="tc_slot_18_2130",
@@ -544,6 +578,8 @@ def _dining_inventory() -> List[InventoryItem]:
             notes=["The restaurant holds the deposit against the new slot."],
             requires_payment=False,
             **common,
+            reliability_risk=0.09,
+            links=[{"label": "Browse Love Dining restaurants", "url": "https://www.americanexpress.com/sg/benefits/love-dining/love-restaurants.html"}],
         ),
         InventoryItem(
             id="opt_din_move19", offer_id="tc_slot_19_2000",
@@ -554,6 +590,8 @@ def _dining_inventory() -> List[InventoryItem]:
             cost_delta=0.0, changes_booking=True, quality=0.9,
             requires_payment=False,
             **common,
+            reliability_risk=0.06,
+            links=[{"label": "Browse Love Dining restaurants", "url": "https://www.americanexpress.com/sg/benefits/love-dining/love-restaurants.html"}],
         ),
         InventoryItem(
             id="opt_din_cancel", offer_id="tc_cancel_88213",
@@ -566,6 +604,8 @@ def _dining_inventory() -> List[InventoryItem]:
             requires_payment=False,
             drops_booking=True,
             **common,
+            reliability_risk=0.0,
+            links=[{"label": "Browse Love Dining restaurants", "url": "https://www.americanexpress.com/sg/benefits/love-dining/love-restaurants.html"}],
         ),
     ]
 
@@ -589,6 +629,8 @@ def _ground_inventory() -> List[InventoryItem]:
             cost_delta=0.0, changes_booking=False, quality=1.0,
             requires_payment=False,
             **common,
+            reliability_risk=0.05,
+            links=[{"label": "View Amex Travel car hire", "url": "https://www.americanexpress.com/en-sg/travel/cars/"}],
         ),
         InventoryItem(
             id="opt_gnd_nex_late", offer_id="jre_NEX_late",
@@ -599,6 +641,8 @@ def _ground_inventory() -> List[InventoryItem]:
             cost_delta=8.0, changes_booking=True, quality=0.82,
             notes=["Last departure — a further slip means a road transfer."],
             **common,
+            reliability_risk=0.16,
+            links=[{"label": "View Amex Travel car hire", "url": "https://www.americanexpress.com/en-sg/travel/cars/"}],
         ),
         InventoryItem(
             id="opt_gnd_private", offer_id="tfr_private_NRT",
@@ -609,6 +653,8 @@ def _ground_inventory() -> List[InventoryItem]:
             cost_delta=75.0, changes_booking=True, quality=0.95,
             notes=["Immune to the rail timetable — the reason it is worth 75 on a late arrival."],
             **common,
+            reliability_risk=0.04,
+            links=[{"label": "View Amex Travel car hire", "url": "https://www.americanexpress.com/en-sg/travel/cars/"}],
         ),
         InventoryItem(
             id="opt_gnd_next_day", offer_id="jre_NEX_next",
@@ -618,6 +664,8 @@ def _ground_inventory() -> List[InventoryItem]:
             start=jst(19, 20, 45), end=jst(19, 21, 50),
             cost_delta=0.0, changes_booking=True, quality=0.85,
             **common,
+            reliability_risk=0.07,
+            links=[{"label": "View Amex Travel car hire", "url": "https://www.americanexpress.com/en-sg/travel/cars/"}],
         ),
         InventoryItem(
             id="opt_gnd_refund", offer_id="jre_refund_4471882",
@@ -631,6 +679,8 @@ def _ground_inventory() -> List[InventoryItem]:
             requires_payment=False,
             drops_booking=True,
             **common,
+            reliability_risk=0.14,
+            links=[{"label": "View Amex Travel car hire", "url": "https://www.americanexpress.com/en-sg/travel/cars/"}],
         ),
     ]
 
@@ -654,6 +704,8 @@ def _domestic_inventory() -> List[InventoryItem]:
             cost_delta=0.0, changes_booking=False, quality=1.0,
             requires_payment=False,
             **common,
+            reliability_risk=0.06,
+            links=[{"label": "View Amex Travel car hire", "url": "https://www.americanexpress.com/en-sg/travel/cars/"}],
         ),
         InventoryItem(
             id="opt_dom_late", offer_id="off_0000AGK211Ww3",
@@ -664,6 +716,8 @@ def _domestic_inventory() -> List[InventoryItem]:
             cost_delta=55.0, changes_booking=True, quality=0.86,
             notes=["Low-cost fare: changeable for a fee, never refundable."],
             **common,
+            reliability_risk=0.11,
+            links=[{"label": "View Amex Travel car hire", "url": "https://www.americanexpress.com/en-sg/travel/cars/"}],
         ),
     ]
 

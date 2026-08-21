@@ -112,6 +112,8 @@ class RecoveryAgent:
             quality=item.quality,
             drops_booking=item.drops_booking,
             optional=bool(item.meta.get("supplementary")),
+            reliability_risk=item.reliability_risk,
+            links=list(item.links),
             notes=list(item.notes),
             tool_call=f"{spec.server} · {spec.tools.get(tool, item.action)}",
         )

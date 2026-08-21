@@ -75,28 +75,62 @@ describe no trip the member could take. Each candidate here is built end to end 
 objective.
 
 **Refunding a ticket returns the money but not the day.** A plan that cancels the park
-passport looks cheaper, faster and less disruptive than one that re-dates it. So
-`experience_lost` is a fourth objective on the Pareto front, priced at what the member
-paid on the revealed-preference argument that they valued it at least that much. Without
-it, the optimizer wins by quietly deleting the trip.
+passport looks cheaper, faster and less disruptive than one that re-dates it, so without
+a term for it the optimizer wins by quietly deleting the trip. `experience_lost` is a
+fourth objective on the Pareto front — see below for how it is priced.
 
 ## Personalization
 
-The time-value weight is never a setting the member picks. It is regressed from what they
-actually chose the last time they had a cost/time trade-off in front of them — and so is
-their tolerance for churn, because a member who waits two days for a fare drop is also a
-member who does not mind their hotel being rebooked.
+The time-value weight is never a setting the member picks. It is regressed from
+what they actually chose the last time they had a cost/time trade-off in front of
+them — and so are their tolerance for churn and their tolerance for a plan that
+might fail on the day, because a member who waits two days for a fare drop is
+also a member who does not mind their hotel being rebooked.
 
-The same cancellation, the same seven bookings, three different histories:
+Once the *whole trip* is priced, the same-day rebooking turns out to be the right
+answer for all three synthetic histories. That is the finding, not a limitation:
+the cheap two-day fare only looks cheap until the forfeited nights, the abandoned
+park day and the extra fragility are counted, and the point of pricing the whole
+journey is that it stops the fare deciding on its own.
 
-| Inferred history | Weighting | Recommendation |
-| --- | --- | --- |
-| Time-sensitive | SGD 45/hr, SGD 58.50/booking | **SQ12 · fastest** — +SGD 188, nothing given up |
-| Balanced | SGD 25/hr, SGD 32.50/booking | **SQ12 · cheapest** — +SGD 55, park passport refunded |
-| Cost-sensitive | SGD 8/hr, SGD 15/booking | **NH860 · cheapest** — −SGD 495, two nights written off |
+The history still does real work. It shows in where the cheap option lands:
 
-The selector in the UI is an inspection view for reviewers. A given member only ever has
-one active.
+| Inferred history | Weighting | Rank of the cheapest fare (−SGD 495, 46h) |
+| --- | --- | ---: |
+| Time-sensitive | SGD 45/hr, SGD 58.50/booking, 25% risk tolerance | 8th of 9 |
+| Balanced | SGD 25/hr, SGD 32.50/booking, 50% risk tolerance | 7th of 9 |
+| Cost-sensitive | SGD 8/hr, SGD 15/booking, 75% risk tolerance | 3rd of 9 |
+
+When the member states an objective outright, the answers separate completely:
+
+| Objective | Recommendation |
+| --- | --- |
+| Lowest cost | **NH860 · cheapest** — −SGD 495, two nights written off |
+| Earliest arrival | **NH802 · cheapest** — arrives 19:35, 2h 30m lost |
+| Least disruption | **SQ12 · fastest** — nothing given up, three bookings touched |
+
+The selector in the UI is an inspection view for reviewers. A given member only
+ever has one active.
+
+## Five objectives, not one
+
+| Objective | What it counts |
+| --- | --- |
+| **Money** | Whole-trip impact, signed against the confirmed trip |
+| **Time** | Hours of the trip given up |
+| **Disruption** | Bookings that have to be re-transacted |
+| **Experience** | Value destroyed by giving up something bought for its own sake |
+| **Fragility** | Chance the plan fails on the day, compounded across its legs |
+
+Every one of them is a Pareto axis, so a plan only reaches the front if nothing
+else beats it on all five at once. The last two are the ones that stop the optimizer cheating. Refunding the park
+passport returns the money but not the day, so `experience_lost` prices the loss
+at 1.5× what was paid — a purchase reveals willingness-to-pay *at or above* the
+price, so valuing it at exactly the price makes deleting the trip read as free.
+And fragility compounds: a direct flight followed by the last train of the night
+is not a low-risk plan just because the flight is. Released bookings stay in that
+product, because giving up a reserved transfer does not make the evening more
+reliable — it puts the member on an unmanaged fallback.
 
 ## Real APIs
 

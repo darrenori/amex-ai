@@ -12,15 +12,16 @@
 
 import { duration, escapeHtml, money, signedMoney, stampZoned } from '../format.js';
 import { icons, kindIcon } from '../icons.js';
+import { collectLinks, partnerLinksMarkup } from './partners.js';
 
-const OBJECTIVE_DOMAIN = { cost: 700, hours: 48, changed: 7 };
+const OBJECTIVE_DOMAIN = { cost: 700, hours: 48, changed: 7, risk: 0.5 };
 
 function bar(value, domain, tone) {
   const width = Math.min(Math.abs(value) / domain, 1) * 100;
   return `<span class="obj-track"><span class="obj-fill ${tone}" style="width:${width.toFixed(1)}%"></span></span>`;
 }
 
-function planCard(plan, { recommended, currency, optionsById }) {
+function planCard(plan, { recommended, currency, optionsById, codes = [] }) {
   const m = plan.metrics;
   const touched = Object.entries(plan.selections)
     .map(([bookingId, optionId]) => ({ bookingId, option: optionsById[optionId] }))
@@ -66,6 +67,11 @@ function planCard(plan, { recommended, currency, optionsById }) {
           <dd class="${m.experience_lost ? 'neg' : ''}">${m.experience_lost ? escapeHtml(money(m.experience_lost, currency)) : 'None'}</dd>
           ${bar(m.experience_lost, OBJECTIVE_DOMAIN.cost, 'crit')}
         </div>
+        <div>
+          <dt>Chance of failing on the day</dt>
+          <dd class="${m.reliability_risk > 0.25 ? 'neg' : ''}">${Math.round(m.reliability_risk * 100)}%</dd>
+          ${bar(m.reliability_risk, OBJECTIVE_DOMAIN.risk, m.reliability_risk > 0.25 ? 'crit' : 'warn')}
+        </div>
       </dl>
 
       <hr class="divider">
@@ -96,7 +102,14 @@ function planCard(plan, { recommended, currency, optionsById }) {
             </li>`).join('')}
         </ul>` : ''}
 
+      ${codes.length ? `
+        <ul class="code-list" aria-label="Reason codes for ${escapeHtml(plan.name)}">
+          ${codes.map((code) => `<li class="code-chip">${escapeHtml(code.replace(/_/g, ' ').toLowerCase())}</li>`).join('')}
+        </ul>` : ''}
+
       <p class="plan-score">${escapeHtml(plan.score_breakdown)}</p>
+
+      ${partnerLinksMarkup(collectLinks(touched.map((t) => t.option)), { label: 'With your Card' })}
 
       <div class="plan-actions">
         <button class="btn btn-ghost" type="button" data-edit-plan="${escapeHtml(plan.id)}">Adjust this plan</button>
@@ -181,6 +194,7 @@ export function plansMarkup(plans, ranking, currency, optionsById) {
         recommended: plan.id === ranking.recommended_plan_id,
         currency,
         optionsById,
+        codes: ranking.reason_codes?.[plan.id] ?? [],
       })).join('')}
     </div>`;
 }

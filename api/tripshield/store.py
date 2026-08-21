@@ -35,6 +35,13 @@ class Session:
     runs: Dict[str, ExecutionRun] = field(default_factory=dict)
     last_planning: Optional[dict] = None
     plan_version: int = 1
+    last_ranking: Optional[dict] = None
+    priority: str = "inferred"
+    profile_id: str = "time"
+    # Append-only. Records why a plan was recommended and what was chosen
+    # instead — the gap between the two is the most useful signal the system
+    # produces about whether its ranking matches what members actually want.
+    audit: List[dict] = field(default_factory=list)
 
 
 _SESSIONS: Dict[str, Session] = {}

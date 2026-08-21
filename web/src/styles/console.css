@@ -669,3 +669,35 @@
     transition: none;
   }
 }
+
+/* ---------- Reason codes and partner links ---------- */
+
+/* A stable, machine-readable vocabulary for why a plan was recommended.
+   Rendered quietly: they are for support agents and audits, not the headline. */
+.code-list { display: flex; flex-wrap: wrap; gap: var(--space-1) var(--space-2); }
+
+.code-chip {
+  padding: 2px var(--space-2);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-sm);
+  background: var(--surface-1);
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 10px;
+  letter-spacing: 0.04em;
+  color: var(--ink-subdued);
+  white-space: nowrap;
+}
+
+/* `.journey-actions` / `.journey-action` are defined in app.css and shared with
+   the outbound Amex links here, so both surfaces stay one control. */
+.journey-actions-label {
+  align-self: center;
+  margin-right: var(--space-1);
+  font-size: var(--text-xs);
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--ink-subdued);
+}
+
+.xstep .journey-actions { margin-top: var(--space-3); }

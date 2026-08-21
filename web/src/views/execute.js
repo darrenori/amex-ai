@@ -17,6 +17,7 @@
 
 import { escapeHtml, money, stampZoned } from '../format.js';
 import { icons } from '../icons.js';
+import { partnerLinksMarkup } from './partners.js';
 
 const STEP_TONE = {
   pending: 'neutral',
@@ -52,7 +53,7 @@ const RUN_LABEL = {
   failed: 'Failed',
 };
 
-function stepRow(step, currency, isNext) {
+function stepRow(step, currency, isNext, links = []) {
   const tone = STEP_TONE[step.state] ?? 'neutral';
   const settled = ['done', 'compensated', 'skipped'].includes(step.state);
   const mark = settled ? icons.check : step.state === 'awaiting_approval' ? icons.alert : icons.clock;
@@ -75,11 +76,12 @@ function stepRow(step, currency, isNext) {
         ${step.log.length ? `<ul class="xstep-log">${step.log.map((l) => `<li>${escapeHtml(l)}</li>`).join('')}</ul>` : ''}
         ${step.compensation && step.compensation.note ? `
           <p class="xstep-comp">${escapeHtml(step.compensation.note)}</p>` : ''}
+        ${step.state === 'done' ? partnerLinksMarkup(links) : ''}
       </div>
     </li>`;
 }
 
-export function runMarkup(run, currency) {
+export function runMarkup(run, currency, optionsById = {}) {
   const pct = Math.round(run.progress * 100);
   const next = run.steps.find((s) => ['pending', 'awaiting_approval'].includes(s.state));
   const awaiting = next && next.state === 'awaiting_approval';
@@ -118,7 +120,7 @@ export function runMarkup(run, currency) {
       </div>
 
       <ol class="xsteps">
-        ${run.steps.map((step) => stepRow(step, currency, step === next)).join('')}
+        ${run.steps.map((step) => stepRow(step, currency, step === next, optionsById[step.option_id]?.links ?? [])).join('')}
       </ol>
 
       <div class="xactions">

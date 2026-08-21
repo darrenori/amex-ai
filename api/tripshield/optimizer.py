@@ -33,6 +33,13 @@ from .catalog import PROFILES_BY_ID
 from .domain import CURRENCY, Priority, RecoveryPlan, money, signed_money
 
 
+# What a plan failing on the day is worth avoiding, before the member's own
+# tolerance is applied. A missed connection on this trip means a second recovery
+# from a worse position — in a foreign airport, at night, with the downstream
+# bookings already amended.
+RELIABILITY_WEIGHT = 150.0
+
+
 @dataclass(frozen=True)
 class Weights:
     """SGD per unit of each non-monetary objective."""
@@ -42,6 +49,12 @@ class Weights:
     time_value: float          # SGD per hour of trip given up
     switching_cost: float      # SGD per booking that has to be re-transacted
     description: str
+    # 0 = will not accept a fragile plan at any price, 1 = indifferent to it.
+    risk_tolerance: float = 0.5
+
+    @property
+    def reliability_weight(self) -> float:
+        return RELIABILITY_WEIGHT * (1.0 - self.risk_tolerance)
 
     def public(self) -> Dict:
         return {
@@ -49,6 +62,8 @@ class Weights:
             "label": self.label,
             "time_value": self.time_value,
             "switching_cost": self.switching_cost,
+            "risk_tolerance": self.risk_tolerance,
+            "reliability_weight": round(self.reliability_weight, 2),
             "description": self.description,
         }
 
@@ -56,19 +71,23 @@ class Weights:
 PRESETS: Dict[str, Weights] = {
     Priority.COST.value: Weights(
         id="cost", label="Lowest cost", time_value=0.0, switching_cost=0.0,
-        description="Money is the only thing that counts. Hours and rebookings are free.",
+        risk_tolerance=1.0,
+        description="Money is the only thing that counts. Hours, rebookings and risk are free.",
     ),
     Priority.TIME.value: Weights(
         id="time", label="Earliest arrival", time_value=140.0, switching_cost=0.0,
-        description="Get there soonest; the fare difference is secondary.",
+        risk_tolerance=0.35,
+        description="Get there soonest; the fare difference is secondary, and a blown connection is not fast.",
     ),
     Priority.DISRUPTION.value: Weights(
         id="disruption", label="Least disruption", time_value=25.0, switching_cost=180.0,
-        description="Touch as few bookings as possible — every change is a chance to go wrong.",
+        risk_tolerance=0.15,
+        description="Touch as few bookings as possible, and do not bet the trip on a tight connection.",
     ),
     Priority.BALANCED.value: Weights(
         id="balanced", label="Balanced", time_value=30.0, switching_cost=45.0,
-        description="Weigh money, hours and churn against each other.",
+        risk_tolerance=0.5,
+        description="Weigh money, hours, churn and fragility against each other.",
     ),
 }
 
@@ -84,14 +103,17 @@ def weights_for(priority: str, profile_id: str = "time") -> Weights:
         # pays to save five hours does not want four suppliers touched either.
         # Both are read off the same history, so both move together.
         switching_cost = round(max(15.0, time_value * 1.3), 1)
+        risk_tolerance = float(profile.get("risk_tolerance", 0.5))
         return Weights(
             id="inferred",
             label=f"Inferred from history — {profile['name'].lower()}",
             time_value=time_value,
             switching_cost=switching_cost,
+            risk_tolerance=risk_tolerance,
             description=(
-                f"{CURRENCY} {profile['weight']}/hour and {CURRENCY} {switching_cost:g} per booking "
-                f"touched, both regressed from choices this member already made "
+                f"{CURRENCY} {profile['weight']}/hour, {CURRENCY} {switching_cost:g} per booking "
+                f"touched and a {risk_tolerance:.0%} tolerance for a plan that might fail on the "
+                f"day — all regressed from choices this member already made "
                 f"({profile['description']})."
             ),
         )
@@ -108,6 +130,7 @@ def score(plan: RecoveryPlan, weights: Weights) -> float:
         + plan.metrics.hours_lost * weights.time_value
         + plan.metrics.bookings_changed * weights.switching_cost
         + plan.metrics.experience_lost
+        + plan.metrics.reliability_risk * weights.reliability_weight
     )
 
 
@@ -125,6 +148,11 @@ def breakdown(plan: RecoveryPlan, weights: Weights) -> str:
         )
     if plan.metrics.experience_lost:
         parts.append(f"Experience given up {money(plan.metrics.experience_lost)}")
+    if weights.reliability_weight and plan.metrics.reliability_risk:
+        parts.append(
+            f"Fragility {plan.metrics.reliability_risk:.0%} × {CURRENCY} "
+            f"{weights.reliability_weight:g} = {money(plan.metrics.reliability_risk * weights.reliability_weight)}"
+        )
     return "  +  ".join(parts) + f"  =  {money(plan.score)}"
 
 
@@ -144,6 +172,7 @@ def _objectives(plan: RecoveryPlan) -> Sequence[float]:
         plan.metrics.hours_lost,
         float(plan.metrics.bookings_changed),
         plan.metrics.experience_lost,
+        plan.metrics.reliability_risk,
     )
 
 
@@ -182,8 +211,15 @@ def rank(plans: List[RecoveryPlan], priority: str, profile_id: str = "time") -> 
     recommended = next((p for p in ordered if p.valid), ordered[0] if ordered else None)
     runner_up = next((p for p in ordered if p.valid and p is not recommended), None)
 
+    # Imported here rather than at module scope: explain.py reads Weights from
+    # this module, and a top-level import would close the cycle.
+    from .explain import reason_codes
+
+    profile = PROFILES_BY_ID.get(profile_id)
+
     return {
         "weights": weights.public(),
+        "reason_codes": {plan.id: reason_codes(plan, weights, profile) for plan in plans},
         "presets": [w.public() for w in PRESETS.values()],
         "order": [plan.id for plan in ordered],
         "recommended_plan_id": recommended.id if recommended else None,

@@ -329,11 +329,19 @@ TRIP_META = {
 # The weight is never a setting the member picks. It is regressed from what they
 # actually chose when they had a cost/time trade-off in front of them. The
 # selector in the UI is an inspection view for reviewers.
+#
+# `time_sensitivity` and `risk_tolerance` are the normalised (0–1) forms of the
+# same regression. `weight` is what the score is denominated in; these two are
+# what the reason codes and the reliability penalty read, because "does this
+# member tolerate a tight connection" is a different question from "what is an
+# hour worth to them".
 PROFILES: List[Dict] = [
     {
         "id": "time",
         "name": "Time-sensitive",
         "description": "pays a premium to save hours",
+        "time_sensitivity": 0.9,
+        "risk_tolerance": 0.25,
         "weight": 45,
         "icon": "clock",
         "history": [
@@ -345,6 +353,8 @@ PROFILES: List[Dict] = [
         "id": "balanced",
         "name": "Balanced",
         "description": "weighs cost and time evenly",
+        "time_sensitivity": 0.55,
+        "risk_tolerance": 0.5,
         "weight": 25,
         "icon": "scale",
         "history": [
@@ -356,6 +366,8 @@ PROFILES: List[Dict] = [
         "id": "cost",
         "name": "Cost-sensitive",
         "description": "waits longer to save money",
+        "time_sensitivity": 0.2,
+        "risk_tolerance": 0.75,
         "weight": 8,
         "icon": "coin",
         "history": [
