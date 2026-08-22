@@ -22,7 +22,7 @@ from __future__ import annotations
 
 import asyncio
 from datetime import datetime, timedelta
-from typing import Dict, List, Optional, Sequence
+from typing import Dict, List, Optional, Sequence, Tuple
 
 from . import connectors
 from .connectors import InventoryItem
@@ -37,14 +37,30 @@ class RecoveryAgent:
     connector = ""
     handles: Sequence[BookingKind] = ()
 
-    async def run(self, task: RecoveryTask, itinerary: Itinerary) -> List[Option]:
+    async def run(
+        self,
+        task: RecoveryTask,
+        itinerary: Itinerary,
+        *,
+        search_cache: Optional[Dict[Tuple[str, str], connectors.SearchResult]] = None,
+    ) -> List[Option]:
         task.state = TaskState.RUNNING
         booking = itinerary.bookings.get(task.booking_id)
 
-        items = connectors.search(self.connector, task.booking_id)
-        task.log.append(
-            f"{self.connector}.{list(connectors.SPECS[self.connector].tools)[0]} → {len(items)} candidates"
+        result = await connectors.search_live_or_fixture(
+            self.connector,
+            task.booking_id,
+            task=task,
+            itinerary=itinerary,
+            cache=search_cache,
         )
+        items = result.items
+        task.log.append(
+            f"{self.connector}.{list(connectors.SPECS[self.connector].tools)[0]} "
+            f"→ {len(items)} candidates ({result.mode})"
+        )
+        if result.fallback_reason:
+            task.log.append(f"{result.upstream} fallback: {result.fallback_reason}")
 
         kept: List[InventoryItem] = []
         for item in items:
@@ -61,6 +77,10 @@ class RecoveryAgent:
         top = kept[: task.constraints.get("max_options", 4)]
 
         options = [self._to_option(item, task) for item in top]
+        for option in options:
+            option.source_mode = option.source_mode or result.mode
+            option.source_upstream = option.source_upstream or result.upstream
+            option.source_note = option.source_note or result.fallback_reason
         task.option_ids = [option.id for option in options]
         task.state = TaskState.COMPLETE if options else TaskState.FAILED
         if not options:
@@ -115,7 +135,13 @@ class RecoveryAgent:
             reliability_risk=item.reliability_risk,
             links=list(item.links),
             notes=list(item.notes),
-            tool_call=f"{spec.server} · {spec.tools.get(tool, item.action)}",
+            tool_call=f"{spec.adapter} · {spec.tools.get(tool, item.action)}",
+            source_mode=getattr(item, "source_mode", "fixture"),
+            source_upstream=getattr(item, "upstream", "") or spec.upstream,
+            source_note=getattr(item, "source_note", ""),
+            amex_partner=getattr(item, "amex_partner", None),
+            synthetic=getattr(item, "synthetic", True),
+            inventory_snapshot=connectors.inventory_item_snapshot(item),
         )
 
 
@@ -333,11 +359,13 @@ def agent_for(kind: BookingKind) -> RecoveryAgent:
     return AGENTS[connectors.connector_for(kind)]
 
 
-def agent_roster() -> List[Dict[str, str]]:
+def agent_roster() -> List[Dict[str, object]]:
     return [
         {
             "name": agent.name,
             "connector": key,
+            "adapter": connectors.SPECS[key].adapter,
+            # One-release compatibility alias for the original UI payload.
             "server": connectors.SPECS[key].server,
             "handles": [kind.value for kind in agent.handles],
             "tools": list(connectors.SPECS[key].tools),

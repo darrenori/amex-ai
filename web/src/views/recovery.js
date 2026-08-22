@@ -138,7 +138,11 @@ export function renderRecovery(container, { profiles, currency, onBack, announce
     if (!state.detection) return loadDetection();
     body.innerHTML = `
       ${detectMarkup(state.detection, state.connectors)}
-      <div class="card">${connectorMarkup(state.connectors.connectors, state.connectors.agents)}</div>
+      <div class="card">${connectorMarkup(
+        state.connectors.connectors,
+        state.connectors.agents,
+        state.connectors,
+      )}</div>
       <div class="stage-next">
         <button class="btn btn-primary" type="button" id="toImpact">
           See what it reaches ${icons.arrowRight}
@@ -187,7 +191,7 @@ export function renderRecovery(container, { profiles, currency, onBack, announce
   // -- stage 3 -----------------------------------------------------------
 
   async function loadPlanning() {
-    busy('Creating recovery tasks and delegating them to the agents…');
+    busy('Creating recovery tasks, searching connector adapters and comparing whole-trip plans…');
     try {
       state.planning = await api.plan(state.priority, state.profileId);
       state.ranking = state.planning.ranking;

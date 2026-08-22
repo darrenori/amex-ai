@@ -443,10 +443,13 @@ async def plan(
 
     assessment = assess(itinerary, cancelled)
     verdicts: Dict[str, Verdict] = assessment["_raw"]
+    search_cache: Dict[Tuple[str, str], connectors.SearchResult] = {}
 
     root_id = cancelled[0]
     root_task = _root_task(itinerary, root_id, priority)
-    root_options = await agents.agent_for(itinerary.bookings[root_id].kind).run(root_task, itinerary)
+    root_options = await agents.agent_for(itinerary.bookings[root_id].kind).run(
+        root_task, itinerary, search_cache=search_cache
+    )
 
     tasks: List[RecoveryTask] = [root_task]
     catalogue: Dict[str, Option] = {o.id: o for o in root_options}
@@ -465,7 +468,9 @@ async def plan(
             for bid in downstream
         ]
         results = await asyncio.gather(*(
-            agents.agent_for(itinerary.bookings[t.booking_id].kind).run(t, itinerary)
+            agents.agent_for(itinerary.bookings[t.booking_id].kind).run(
+                t, itinerary, search_cache=search_cache
+            )
             for t in wave
         ))
         tasks.extend(wave)
@@ -515,6 +520,13 @@ async def plan(
         "ranking": ranking,
         "priority": priority,
         "profile_id": profile_id,
+        # Consumed by the API/session layer and removed before serialization.
+        # This keeps live/sandbox offer state request-scoped rather than global.
+        "_inventory": {
+            option.id: option.inventory_snapshot
+            for option in catalogue.values()
+            if option.inventory_snapshot
+        },
     }
 
 

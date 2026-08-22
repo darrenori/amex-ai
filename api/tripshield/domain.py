@@ -267,7 +267,22 @@ class Option:
     reliability_risk: float = 0.05
     links: List[Dict[str, str]] = field(default_factory=list)
     notes: List[str] = field(default_factory=list)
-    tool_call: str = ""          # the MCP call that produced it, shown in the trace
+    tool_call: str = ""          # adapter call that produced it, shown in the trace
+    # Provenance is kept separate from the connector name. A Duffel-backed
+    # option, for example, may still be a recorded fixture when its sandbox is
+    # unavailable. The UI and audit trail must be able to say which is which.
+    source_mode: str = "fixture"
+    source_upstream: str = ""
+    source_note: str = ""
+    # Present only after an exact/explicit-alias match against the curated
+    # official Amex catalogue. An arbitrary travel supplier is never inferred
+    # to be an Amex partner.
+    amex_partner: Optional[Dict[str, Any]] = None
+    synthetic: bool = True
+    # Private request/run snapshot used by the fixture transaction simulator.
+    # It is deliberately excluded from ``public()``: supplier payload details
+    # are execution state, not part of the member-facing option contract.
+    inventory_snapshot: Dict[str, Any] = field(default_factory=dict, repr=False)
 
     def public(self) -> Dict[str, Any]:
         return {
@@ -295,6 +310,11 @@ class Option:
             "links": self.links,
             "notes": self.notes,
             "tool_call": self.tool_call,
+            "source_mode": self.source_mode,
+            "source_upstream": self.source_upstream,
+            "source_note": self.source_note,
+            "amex_partner": self.amex_partner,
+            "synthetic": self.synthetic,
         }
 
 
@@ -455,6 +475,10 @@ class ExecutionRun:
     state: RunState = RunState.APPROVED
     approved_at: Optional[datetime] = None
     log: List[str] = field(default_factory=list)
+    # Immutable supplier-item snapshots for the options frozen into this run.
+    # Keeping these on the run avoids a process-global live-inventory cache and
+    # makes later fixture execution/compensation resolve the approved offer.
+    inventory: Dict[str, Dict[str, Any]] = field(default_factory=dict, repr=False)
 
     @property
     def progress(self) -> float:

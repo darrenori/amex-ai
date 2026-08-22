@@ -3,12 +3,11 @@
 How a flight cancellation becomes a re-arranged trip, and where in that pipeline
 a model is actually doing the work.
 
-The short version: **most of this is not a model, on purpose.** Whether a member
-can still reach a timed park entry is arithmetic, and arithmetic that can be
-tested. Models are used where the answer genuinely depends on judgement — what a
-member's history implies about their preferences, which of several defensible
-plans to lead with, how to word a trade-off. Every one of those seams is marked
-below.
+The short version: **the model does not decide the plan.** Whether a member can
+still reach a timed park entry is arithmetic, and arithmetic can be tested. The
+graph, feasibility rules, Pareto front, scores, ordering, reason codes and
+execution saga remain deterministic. Claude or GPT-5.6 Sol may read an immutable
+snapshot through one embedded MCP server and explain the recommendation.
 
 ---
 
@@ -34,13 +33,16 @@ flowchart TB
         AUDIT["Reason codes + audit<br/>explain.py"]
     end
 
-    subgraph MCP["MCP connector layer · connectors.py"]
-        C1["mcp/flight-status<br/>AeroDataBox"]
-        C2["mcp/duffel-air<br/>Duffel"]
-        C3["mcp/liteapi-lodging<br/>LiteAPI"]
-        C4["mcp/viator-activities<br/>Viator"]
-        C5["mcp/tablecheck-dining"]
-        C6["mcp/ground-transfer"]
+    subgraph REST["Direct REST adapters · connectors.py"]
+        C1["AeroDataBox<br/>production status read"]
+        C2["Duffel<br/>test offer search"]
+        C3["LiteAPI<br/>sandbox hotel search"]
+        CF["Activities · dining · ground<br/>fixture inventory"]
+    end
+
+    subgraph CONTEXT["Read-only model context"]
+        MCPS["TripShield Context MCP<br/>embedded · request-bound"]
+        MODEL["Claude or GPT-5.6 Sol<br/>explanation only"]
     end
 
     UI --> DETECT
@@ -51,9 +53,16 @@ flowchart TB
     RANK --> AUDIT
 
     DETECT -.->|poll / webhook| C1
-    AGENTS -.->|search| C2 & C3 & C4 & C5 & C6
-    EXEC -.->|book · quote · cancel| C2 & C3 & C4 & C5 & C6
+    AGENTS -.->|read-only search| C2 & C3 & CF
+    EXEC -.->|simulated transaction| CF
+    GRAPH & RANK -.->|immutable snapshot| MCPS --> MODEL
+    MODEL -.->|validated prose| UI
 ```
+
+MCP is not the connector transport. AeroDataBox, Duffel and LiteAPI are ordinary
+HTTP clients with explicit deadlines and deterministic fixture fallbacks. Every
+booking, change, cancellation, refund and payment remains simulated even when a
+candidate came from a production or sandbox read.
 
 ---
 
@@ -83,8 +92,8 @@ sequenceDiagram
 
 `Canceled` (one *l*), `CanceledUncertain` and `Diverted` are AeroDataBox's own
 vocabulary, used verbatim rather than re-mapped. This connector runs **live**
-against the real API when `AERODATABOX_API_KEY` is set — reading a flight's
-status is free and read-only, so there is no reason to fake it.
+against the real API when `AERODATABOX_API_KEY` is set. Without a usable response,
+the same detection path returns a recorded fixture with fallback provenance.
 
 ---
 
@@ -261,26 +270,32 @@ the member on an unmanaged fallback.
 
 ```mermaid
 flowchart LR
-    H["Member's booking<br/>and choice history"] --> REG["Preference regression<br/>MODEL"]
-    REG --> W["time value · switching cost<br/>risk tolerance"]
-    W --> SCORE["Scalarised score"]
-
-    style REG fill:#E7F1FB,stroke:#006FCF,stroke-width:2px
+    SNAP["Immutable request snapshot"] --> MCP["TripShield Context MCP"]
+    MCP --> G["get_trip_graph"]
+    MCP --> P["list_candidate_plans"]
+    MCP --> H["get_member_choice_history"]
+    G & P & H --> MODEL["Claude or GPT-5.6 Sol"]
+    MODEL --> VALID["Schema + ID + recommendation validation"]
+    VALID -->|valid| COPY["Explanation addendum"]
+    VALID -->|invalid / timeout| FALLBACK["Deterministic explanation"]
 ```
 
-The weight is **never a setting the member picks**. It is regressed from what
-they chose the last time they had this trade-off in front of them, and all three
-weights move together — a member who waits two days for a fare drop is also a
-member who does not mind their hotel being rebooked.
+Both providers use the same in-process MCP server and must call all three tools
+exactly once. The server exposes no write or transaction tools and no state beyond
+the current request. Model output is accepted only when its plan and option IDs are
+known and its recommended plan agrees with the deterministic optimizer. It is
+generated only for initial planning; interactive reranking returns
+`ai.status = "not_requested"`, which prevents stale prose from being displayed.
 
-Other seams, marked `# MODEL SEAM` in `agents.py`:
+The active provider is chosen with `AI_PROVIDER=anthropic|openai`. If it is unset,
+Anthropic is preferred when configured, then OpenAI. An explicitly selected but
+unconfigured provider fails closed rather than crossing providers. Timeouts, rate
+limits, tool-loop errors and invalid structured output all preserve the existing
+deterministic result.
 
-| Seam | The judgement call |
-| --- | --- |
-| `FlightRecoveryAgent.rank` | Carrier, connection risk and lounge access for *this* member |
-| `ActivityRecoveryAgent.rank` | Is an evening pass an acceptable substitute for a full day? |
-| Ambiguous buffers | Is 40 minutes really enough at this terminal, at this hour? |
-| Explanation prose | Wording the trade-off for a member who is standing in an airport |
+The inferred profile weights remain deterministic inputs derived from the synthetic
+member history. The model contextualizes carrier/connection and activity trade-offs
+in prose; it does not modify those weights or the scalarised score.
 
 ---
 
@@ -383,9 +398,17 @@ actually want.
 | --- | --- |
 | Frontend → feasibility | The browser proposes; the server decides. Always. |
 | API data → outbound links | Allowlisted to `https://…americanexpress.com` at the render boundary, so it holds whichever connector produced the link |
+| Supplier → Amex partner | Exact normalized name or explicit alias in the same category and market; never fuzzy inference |
 | Plan display → plan approval | `Option` is rebuilt from its own field list, so a new field cannot silently default and make the approved plan differ from the displayed one |
-| Booking connectors | Fixture-only. A demonstration must not transact against live inventory |
+| REST connector reads | AeroDataBox may be live; Duffel and LiteAPI are sandbox; every failure falls back to fixtures with provenance |
+| Connector transactions | Fixture-only. A demonstration must not transact against live inventory |
+| Model MCP | Exactly three read-only tools over an immutable request snapshot; no public MCP endpoint |
 | Execution runs | Never reconstructed from seed data — a missing run returns `410`, because it records transactions that actually happened |
+
+The Amex partner catalog is curated from official Amex pages and records when an
+entry was verified. It is updated as reviewed source code, not by runtime scraping.
+Viator's official Experiences MCP is documented but deferred; activities remain
+fixtures, as do dining and ground transport.
 
 ---
 
@@ -396,8 +419,11 @@ actually want.
 | `domain.py` | Shared vocabulary and types | ✔ |
 | `catalog.py` | The member's booking history | ✔ |
 | `graph.py` | Dependency graph, propagation, splicing | ✔ |
-| `connectors.py` | MCP clients onto real travel APIs | ✔ (live for status) |
-| `agents.py` | Five specialized recovery subagents | ✔ + model seams |
+| `connectors.py` | Direct REST reads, provenance and fixture fallbacks | ✔ (external reads vary) |
+| `amex_partners.py` | Curated official-source partner catalog and exact matching | ✔ |
+| `mcp_server.py` | Embedded immutable TripShield Context MCP | Read-only |
+| `ai.py` | Claude/OpenAI tool loop and structured-output validation | Explanation only |
+| `agents.py` | Five specialized recovery subagents | ✔ |
 | `orchestrator.py` | The workflow, task creation, plan assembly | ✔ |
 | `optimizer.py` | Pareto front and scalarised ranking | Weights are inferred |
 | `explain.py` | Reason codes and audit records | ✔ |
@@ -407,5 +433,5 @@ actually want.
 ---
 
 *Independent AMEX AI Hackathon 2026 concept. Not affiliated with or endorsed by
-American Express. Prices, references and availability are synthetic; carriers,
-routes, properties and API contracts are real.*
+American Express. Booking references and transactions are synthetic; read-only
+availability can come from named live/sandbox providers and is labelled by provenance.*

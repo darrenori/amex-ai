@@ -1,4 +1,4 @@
-"""MCP-style clients onto real travel APIs.
+"""Direct REST adapters onto real travel APIs, with deterministic fallbacks.
 
 Each connector is the standardized interface an agent gets to one external
 capability. They are declared against real, currently-available products, and
@@ -40,9 +40,11 @@ every tool name below maps to a real endpoint on that product:
 Live vs. fixture
 ----------------
 ``status`` will call AeroDataBox for real when ``AERODATABOX_API_KEY`` is set,
-because reading a flight's status is free, read-only and the genuinely useful
-thing to prove. Everything else runs against the fixture inventory below:
-a demonstration must not transact against real booking APIs.
+because flight status is read-only. Duffel test-mode offers and LiteAPI sandbox
+rates are read when their credentials are present; incomplete or unusable result
+sets fall back atomically to the fixture inventory below. Activities await
+partner approval, while dining and ground are explicitly designed fixtures.
+Every transaction remains simulated regardless of which read source was used.
 
 ``connector_report()`` renders this table into the UI so the wiring is visible
 rather than claimed.
@@ -50,21 +52,47 @@ rather than claimed.
 
 from __future__ import annotations
 
+import copy
+import asyncio
 import json
 import os
+import time
 import urllib.error
 import urllib.parse
 import urllib.request
-from dataclasses import dataclass, field
+from dataclasses import asdict, dataclass, field
 from datetime import datetime, timedelta
-from typing import Any, Dict, List, Optional
+from typing import Any, Callable, Dict, List, Mapping, Optional, Sequence, Tuple
 
 from .catalog import JST, SGT, jst, sgt
 from .domain import BookingKind
+from .amex_partners import match_partner
 
 # AeroDataBox's own status vocabulary. `Canceled` (one l) is their spelling.
 CANCELLING_STATUSES = {"Canceled", "CanceledUncertain"}
 DISRUPTIVE_STATUSES = CANCELLING_STATUSES | {"Diverted"}
+
+JsonTransport = Callable[[urllib.request.Request, float], Any]
+
+
+def _default_transport(request: urllib.request.Request, timeout: float) -> Any:
+    """Perform one bounded JSON request (injectable in every live helper)."""
+    with urllib.request.urlopen(request, timeout=timeout) as response:
+        return json.loads(response.read().decode("utf-8"))
+
+
+def _json_request(
+    method: str,
+    url: str,
+    *,
+    headers: Mapping[str, str],
+    payload: Optional[Mapping[str, Any]] = None,
+    timeout: float = 6.0,
+    transport: Optional[JsonTransport] = None,
+) -> Any:
+    body = json.dumps(payload).encode("utf-8") if payload is not None else None
+    request = urllib.request.Request(url, data=body, headers=dict(headers), method=method)
+    return (transport or _default_transport)(request, timeout)
 
 
 @dataclass
@@ -78,20 +106,42 @@ class ConnectorSpec:
     docs: str
     auth_env: str
     tools: Dict[str, str]                 # tool name -> real endpoint
-    mode: str = "fixture"                 # "live" once the key is present
+    adapter: str = ""
+    mode: str = "fixture"
+    availability: str = "available"
+    read_mode: str = "fixture"
+    transaction_mode: str = "fixture"
 
     def public(self) -> Dict[str, Any]:
-        live = bool(os.environ.get(self.auth_env)) and self.mode == "live"
+        credential_present = bool(self.auth_env and os.environ.get(self.auth_env))
+        configured_mode = self.read_mode if credential_present else "fixture"
+        if self.availability in {"approval_required", "designed_fixture", "no_public_api"}:
+            configured_mode = "fixture"
         return {
             "key": self.key,
+            "adapter": self.adapter or f"rest/{self.key}",
+            # Compatibility alias for one release; adapters are not MCP servers.
             "server": self.server,
             "upstream": self.upstream,
             "base_url": self.base_url,
             "docs": self.docs,
             "auth_env": self.auth_env,
             "tools": self.tools,
-            "mode": "live" if live else "fixture",
-            "credential_present": bool(os.environ.get(self.auth_env)),
+            "mode": configured_mode,
+            "credential_present": credential_present,
+            "availability": self.availability if self.availability != "available" else (
+                "available" if credential_present or not self.auth_env else "credential_required"
+            ),
+            "capabilities": {
+                "read": configured_mode,
+                "transaction": self.transaction_mode,
+            },
+            "fallback_data": {
+                "available": True,
+                "type": "synthetic_dummy",
+                "deterministic": True,
+                "runtime_scraping": False,
+            },
         }
 
 
@@ -110,7 +160,9 @@ STATUS_SPEC = ConnectorSpec(
         "get_flight_status": "GET /flights/number/{number}/{date}",
         "get_airport_delays": "GET /airports/{codeType}/{code}/delays",
     },
+    adapter="rest/aerodatabox",
     mode="live",
+    read_mode="live",
 )
 
 # What the demonstration's monitor sees when it sweeps the member's flights.
@@ -155,7 +207,13 @@ FIXTURE_STATUS: Dict[str, Dict[str, Any]] = {
 }
 
 
-def fetch_flight_status(flight_number: str, date_local: str) -> Dict[str, Any]:
+def fetch_flight_status(
+    flight_number: str,
+    date_local: str,
+    *,
+    timeout: float = 6.0,
+    transport: Optional[JsonTransport] = None,
+) -> Dict[str, Any]:
     """One flight, one date. Live if a key is present, fixture otherwise.
 
     The response is normalised to the fields the detector uses, and always
@@ -172,20 +230,20 @@ def fetch_flight_status(flight_number: str, date_local: str) -> Dict[str, Any]:
             "Accept": "application/json",
         })
         try:
-            with urllib.request.urlopen(request, timeout=6) as response:
-                payload = json.loads(response.read().decode("utf-8"))
+            payload = (transport or _default_transport)(request, timeout)
             legs = payload if isinstance(payload, list) else [payload]
-            if legs:
+            if legs and isinstance(legs[0], Mapping) and legs[0].get("status"):
                 leg = legs[0]
                 return {
                     "source": "live",
+                    "synthetic": False,
                     "upstream": STATUS_SPEC.upstream,
                     "endpoint": f"GET /flights/number/{compact}/{date_local}",
                     "flight": leg,
-                    "status": leg.get("status", "Unknown"),
+                    "status": leg["status"],
                     "cancelled": leg.get("status") in CANCELLING_STATUSES,
                 }
-        except (urllib.error.URLError, TimeoutError, ValueError, KeyError) as error:
+        except (urllib.error.URLError, TimeoutError, OSError, ValueError, KeyError, TypeError) as error:
             # A monitor that falls over when the upstream blips is not a monitor.
             return _fixture_status(compact, date_local, note=f"live lookup failed ({type(error).__name__}); using fixture")
 
@@ -197,6 +255,7 @@ def _fixture_status(compact: str, date_local: str, note: str = "") -> Dict[str, 
     if leg is None:
         return {
             "source": "fixture",
+            "synthetic": True,
             "upstream": STATUS_SPEC.upstream,
             "endpoint": f"GET /flights/number/{compact}/{date_local}",
             "flight": None,
@@ -206,6 +265,7 @@ def _fixture_status(compact: str, date_local: str, note: str = "") -> Dict[str, 
         }
     return {
         "source": "fixture",
+        "synthetic": True,
         "upstream": STATUS_SPEC.upstream,
         "endpoint": f"GET /flights/number/{compact}/{date_local}",
         "flight": leg,
@@ -255,6 +315,53 @@ class InventoryItem:
     # in the renderer is the enforcement, this list is the content.
     links: List[Dict[str, str]] = field(default_factory=list)
     meta: Dict[str, Any] = field(default_factory=dict)
+    source_mode: str = "fixture"
+    upstream: str = ""
+    amex_partner: Optional[Dict[str, Any]] = None
+    # False only for an authenticated upstream read. Fixtures are deterministic
+    # synthetic dummy records and retain this label through the public option.
+    synthetic: bool = True
+
+
+@dataclass
+class SearchResult:
+    """A planning read plus honest provenance for that complete result set."""
+
+    items: List[InventoryItem]
+    mode: str
+    upstream: str
+    fallback_reason: str = ""
+    latency_ms: Optional[int] = None
+
+
+@dataclass
+class SearchContext:
+    """Request-owned cache and injectable network boundary."""
+
+    transport: Optional[JsonTransport] = None
+    timeout: float = 6.0
+    cache: Dict[Tuple[str, str], SearchResult] = field(default_factory=dict)
+
+    async def search(
+        self,
+        connector: str,
+        booking_id: str,
+        *,
+        task: Any = None,
+        itinerary: Any = None,
+    ) -> SearchResult:
+        key = (connector, booking_id)
+        if key not in self.cache:
+            self.cache[key] = await _search_uncached(
+                connector,
+                booking_id,
+                task=task,
+                itinerary=itinerary,
+                transport=self.transport,
+                timeout=self.timeout,
+            )
+        # Callers may sort/filter items; don't let that mutate the cached snapshot.
+        return copy.deepcopy(self.cache[key])
 
 
 FLIGHTS_SPEC = ConnectorSpec(
@@ -271,6 +378,8 @@ FLIGHTS_SPEC = ConnectorSpec(
         "quote_cancellation": "POST /air/order_cancellations",
         "confirm_cancellation": "POST /air/order_cancellations/{id}/actions/confirm",
     },
+    adapter="rest/duffel",
+    read_mode="sandbox",
 )
 
 LODGING_SPEC = ConnectorSpec(
@@ -286,6 +395,8 @@ LODGING_SPEC = ConnectorSpec(
         "book": "POST /rates/book",
         "cancel": "PUT /bookings/{bookingId}/cancel",
     },
+    adapter="rest/liteapi",
+    read_mode="sandbox",
 )
 
 ACTIVITIES_SPEC = ConnectorSpec(
@@ -301,34 +412,40 @@ ACTIVITIES_SPEC = ConnectorSpec(
         "quote_cancellation": "POST /bookings/cancel-quote",
         "cancel": "POST /bookings/cancel",
     },
+    adapter="rest/viator",
+    availability="approval_required",
 )
 
 DINING_SPEC = ConnectorSpec(
     key="dining",
     server="mcp/tablecheck-dining",
     upstream="TableCheck",
-    base_url="https://api.tablecheck.com/v2",
+    base_url="https://www.tablecheck.com",
     docs="https://www.tablecheck.com/en/join/",
-    auth_env="TABLECHECK_API_KEY",
+    auth_env="",
     tools={
-        "search_availability": "GET /shops/{shop}/availability",
-        "modify_reservation": "PATCH /reservations/{id}",
-        "cancel_reservation": "DELETE /reservations/{id}",
+        "search_availability": "fixture://dining/availability",
+        "modify_reservation": "fixture://dining/reservations/{id}",
+        "cancel_reservation": "fixture://dining/reservations/{id}/cancel",
     },
+    adapter="fixture/dining",
+    availability="designed_fixture",
 )
 
 GROUND_SPEC = ConnectorSpec(
     key="ground",
     server="mcp/ground-transfer",
     upstream="JR East / airport transfer desk",
-    base_url="https://api.jreast.example/transfers",
+    base_url="https://www.jreast.co.jp/multi/en/nex/",
     docs="https://www.jreast.co.jp/multi/en/nex/",
-    auth_env="GROUND_TRANSFER_KEY",
+    auth_env="",
     tools={
-        "search": "GET /connections",
-        "reserve": "POST /reservations",
-        "cancel": "DELETE /reservations/{id}",
+        "search": "fixture://ground/connections",
+        "reserve": "fixture://ground/reservations",
+        "cancel": "fixture://ground/reservations/{id}/cancel",
     },
+    adapter="fixture/ground",
+    availability="no_public_api",
 )
 
 SPECS: Dict[str, ConnectorSpec] = {
@@ -735,14 +852,31 @@ INVENTORY_BY_ID: Dict[str, InventoryItem] = {item.id: item for item in INVENTORY
 
 
 def search(connector: str, booking_id: str) -> List[InventoryItem]:
-    """The one read every agent makes. Real connectors would send the task's
-    constraints upstream; the fixture filters the same shape locally."""
+    """Compatibility fixture read used by the original synchronous agents."""
     return [
         item for item in INVENTORY
         if item.booking_id in (booking_id, f"{booking_id}_supplement")
         and SPECS[connector].key == connector
         and _owns(connector, item)
     ]
+
+
+def inventory_item_snapshot(item: InventoryItem) -> Dict[str, Any]:
+    """JSON-safe request/session snapshot for later simulated execution."""
+    value = asdict(item)
+    value["kind"] = item.kind.value
+    value["start"] = item.start.isoformat()
+    value["end"] = item.end.isoformat()
+    return value
+
+
+def inventory_item_from_snapshot(value: Mapping[str, Any]) -> InventoryItem:
+    """Restore a validated-enough internal item from our own stored snapshot."""
+    payload = dict(value)
+    payload["kind"] = BookingKind(payload["kind"])
+    payload["start"] = _iso_datetime(payload["start"])
+    payload["end"] = _iso_datetime(payload["end"])
+    return InventoryItem(**payload)
 
 
 _OWNERSHIP = {
@@ -754,8 +888,359 @@ _OWNERSHIP = {
 }
 
 
+def _market_for(item: InventoryItem) -> str:
+    return "SG" if item.place_code == "SIN" or item.place_code.startswith("SIN-") else "JP"
+
+
+for _item in INVENTORY:
+    _connector_key = _OWNERSHIP[_item.kind]
+    _item.source_mode = "fixture"
+    _item.upstream = SPECS[_connector_key].upstream
+    _item.meta.setdefault("source_mode", "fixture")
+    _item.meta.setdefault("upstream", SPECS[_connector_key].upstream)
+    _partner = match_partner(_item.supplier, category=_item.kind.value, market=_market_for(_item))
+    if _partner:
+        _item.amex_partner = _partner
+        _item.meta["amex_partner"] = _partner
+
+
 def _owns(connector: str, item: InventoryItem) -> bool:
     return _OWNERSHIP[item.kind] == connector
+
+
+def _fixture_search_result(connector: str, booking_id: str, reason: str = "") -> SearchResult:
+    return SearchResult(
+        items=copy.deepcopy(search(connector, booking_id)),
+        mode="fixture",
+        upstream=SPECS[connector].upstream,
+        fallback_reason=reason,
+    )
+
+
+def _iso_datetime(value: Any) -> datetime:
+    if not isinstance(value, str) or not value:
+        raise ValueError("missing timestamp")
+    return datetime.fromisoformat(value.replace("Z", "+00:00"))
+
+
+def _booking_parameters(booking_id: str, itinerary: Any = None) -> Dict[str, Any]:
+    booking = None
+    bookings = getattr(itinerary, "bookings", None)
+    if isinstance(bookings, Mapping):
+        booking = bookings.get(booking_id)
+    defaults: Dict[str, Dict[str, Any]] = {
+        "bk_flight_out": {
+            "origin": "SIN", "destination": "NRT", "departure_date": "2026-09-18",
+            "cabin": "business", "refundable": 2800.0, "original_arrival": jst(18, 17, 5),
+        },
+        "bk_flight_dom": {
+            "origin": "NRT", "destination": "KIX", "departure_date": "2026-09-21",
+            "cabin": "economy", "refundable": 0.0, "original_arrival": jst(21, 15, 40),
+        },
+        "bk_hotel_tokyo": {
+            "checkin": "2026-09-18", "checkout": "2026-09-21", "city": "Tokyo",
+            "place_code": "TYO", "refundable": 600.0,
+        },
+    }
+    params = dict(defaults.get(booking_id, {}))
+    if booking is not None:
+        params["refundable"] = float(getattr(booking, "refundable", params.get("refundable", 0.0)))
+        start, end = getattr(booking, "start", None), getattr(booking, "end", None)
+        if getattr(booking, "kind", None) is BookingKind.LODGING and start and end:
+            params.update(checkin=start.date().isoformat(), checkout=end.date().isoformat())
+        if getattr(booking, "kind", None) is BookingKind.FLIGHT and start and end:
+            params.update(departure_date=start.date().isoformat(), original_arrival=end)
+    return params
+
+
+def _duffel_search(
+    booking_id: str,
+    *,
+    itinerary: Any = None,
+    transport: Optional[JsonTransport] = None,
+    timeout: float = 6.0,
+) -> SearchResult:
+    token = os.environ.get(FLIGHTS_SPEC.auth_env)
+    if not token:
+        return _fixture_search_result("flights", booking_id, "missing_credential")
+    params = _booking_parameters(booking_id, itinerary)
+    required = {"origin", "destination", "departure_date", "original_arrival"}
+    if not required <= params.keys():
+        return _fixture_search_result("flights", booking_id, "unsupported_booking")
+    payload = {"data": {
+        "slices": [{"origin": params["origin"], "destination": params["destination"],
+                    "departure_date": params["departure_date"]}],
+        "passengers": [{"type": "adult"}], "cabin_class": params.get("cabin", "economy"),
+    }}
+    try:
+        raw = _json_request(
+            "POST", f"{FLIGHTS_SPEC.base_url}/air/offer_requests?return_offers=true",
+            headers={"Authorization": f"Bearer {token}", "Duffel-Version": "v2",
+                     "Accept": "application/json", "Content-Type": "application/json"},
+            payload=payload, timeout=timeout, transport=transport,
+        )
+        data = raw.get("data", {}) if isinstance(raw, Mapping) else {}
+        offers = data.get("offers", []) if isinstance(data, Mapping) else []
+        if isinstance(offers, Mapping):
+            offers = offers.get("data", [])
+        items = _normalize_duffel_offers(offers, booking_id, params)
+        if len(items) < 2:
+            return _fixture_search_result("flights", booking_id, "insufficient_eligible_offers")
+        return SearchResult(items=items[:4], mode="sandbox", upstream=FLIGHTS_SPEC.upstream)
+    except (urllib.error.URLError, TimeoutError, OSError, ValueError, KeyError, TypeError) as error:
+        return _fixture_search_result("flights", booking_id, f"upstream_{type(error).__name__.lower()}")
+
+
+def _normalize_duffel_offers(
+    offers: Any, booking_id: str, params: Mapping[str, Any],
+) -> List[InventoryItem]:
+    normalized: List[InventoryItem] = []
+    if not isinstance(offers, Sequence) or isinstance(offers, (str, bytes)):
+        return normalized
+    for offer in offers:
+        try:
+            if not isinstance(offer, Mapping) or offer.get("total_currency") != "SGD":
+                continue
+            total = float(offer["total_amount"])
+            expires_at = offer.get("expires_at")
+            if expires_at:
+                expiry = _iso_datetime(expires_at)
+                if expiry <= datetime.now(expiry.tzinfo):
+                    continue
+            slices = offer.get("slices", [])
+            segments = [segment for slice_ in slices for segment in slice_.get("segments", [])]
+            if not segments:
+                continue
+            start = _iso_datetime(segments[0]["departing_at"])
+            end = _iso_datetime(segments[-1]["arriving_at"])
+            hours_lost = max(0.0, (end - params["original_arrival"]).total_seconds() / 3600)
+            stops = max(0, len(segments) - len(slices))
+            carrier = (offer.get("owner", {}).get("name")
+                       or segments[0].get("marketing_carrier", {}).get("name") or "Duffel airline")
+            numbers = [
+                f"{segment.get('marketing_carrier', {}).get('iata_code', '')}{segment.get('marketing_carrier_flight_number', '')}"
+                for segment in segments
+            ]
+            title_number = "/".join(number for number in numbers if number) or "Duffel offer"
+            quality = round(max(0.35, min(0.98, 0.98 - hours_lost / 72 - stops * 0.10)), 3)
+            risk = round(min(0.9, 0.08 + stops * 0.12 + (0.04 if hours_lost >= 18 else 0.0)), 3)
+            normalized.append(InventoryItem(
+                id=f"duffel_{offer['id']}", booking_id=booking_id, kind=BookingKind.FLIGHT,
+                title=f"{title_number} · Duffel test offer",
+                detail=f"{str(offer.get('cabin_class', params.get('cabin', 'economy'))).title()} · "
+                       f"{'Direct' if not stops else f'{stops} stop'}",
+                supplier=str(carrier), offer_id=str(offer["id"]), start=start, end=end,
+                location=f"{params['origin']} → {params['destination']}",
+                place_code=f"{params['origin']}-{params['destination']}",
+                cost_delta=round(total - float(params.get("refundable", 0.0)), 2),
+                changes_booking=True, quality=quality, reliability_risk=risk,
+                action="flights.confirm_change", compensating_action="flights.confirm_cancellation",
+                notes=["Read from Duffel test mode; any later transaction remains simulated."],
+                source_mode="sandbox", upstream=FLIGHTS_SPEC.upstream,
+                synthetic=False,
+                meta={"hours_lost": round(hours_lost, 2),
+                      "stops": "Direct" if not stops else f"{stops} stop",
+                      "stops_status": "good" if not stops else "warn", "source_mode": "sandbox",
+                      "upstream": FLIGHTS_SPEC.upstream, "currency": "SGD"},
+            ))
+        except (KeyError, TypeError, ValueError, OverflowError):
+            continue
+    return sorted(normalized, key=lambda item: (item.end, item.cost_delta, item.id))
+
+
+def _liteapi_search(
+    booking_id: str,
+    *,
+    itinerary: Any = None,
+    transport: Optional[JsonTransport] = None,
+    timeout: float = 6.0,
+) -> SearchResult:
+    key = os.environ.get(LODGING_SPEC.auth_env)
+    if not key:
+        return _fixture_search_result("lodging", booking_id, "missing_credential")
+    params = _booking_parameters(booking_id, itinerary)
+    if not {"checkin", "checkout", "city"} <= params.keys():
+        return _fixture_search_result("lodging", booking_id, "unsupported_booking")
+    payload: Dict[str, Any] = {
+        "checkin": params["checkin"], "checkout": params["checkout"], "currency": "SGD",
+        "guestNationality": "SG", "occupancies": [{"adults": 1, "children": []}],
+        "cityName": params["city"],
+    }
+    hotel_ids = [part.strip() for part in os.environ.get("LITEAPI_HOTEL_IDS", "").split(",") if part.strip()]
+    if hotel_ids:
+        payload["hotelIds"] = hotel_ids
+    try:
+        raw = _json_request(
+            "POST", f"{LODGING_SPEC.base_url}/hotels/rates",
+            headers={"X-API-Key": key, "Accept": "application/json", "Content-Type": "application/json"},
+            payload=payload, timeout=timeout, transport=transport,
+        )
+        items = _normalize_liteapi_rates(raw, booking_id, params)
+        if not items:
+            return _fixture_search_result("lodging", booking_id, "no_eligible_sgd_rates")
+        return SearchResult(items=items[:4], mode="sandbox", upstream=LODGING_SPEC.upstream)
+    except (urllib.error.URLError, TimeoutError, OSError, ValueError, KeyError, TypeError) as error:
+        return _fixture_search_result("lodging", booking_id, f"upstream_{type(error).__name__.lower()}")
+
+
+def _money_value(rate: Mapping[str, Any]) -> Tuple[Optional[float], Optional[str]]:
+    for key in ("suggestedSellingPrice", "retailRate", "price"):
+        value = rate.get(key)
+        if isinstance(value, Mapping):
+            candidate = value.get("amount", value.get("total"))
+            currency = value.get("currency", rate.get("currency"))
+            if isinstance(candidate, Sequence) and not isinstance(candidate, (str, bytes)):
+                candidate = sum(float(part.get("amount", 0)) for part in candidate if isinstance(part, Mapping))
+            if candidate is not None:
+                return float(candidate), str(currency or "")
+    candidate = rate.get("total", rate.get("amount", rate.get("total_amount")))
+    if candidate is None:
+        return None, None
+    return float(candidate), str(rate.get("currency", rate.get("total_currency", "")))
+
+
+def _normalize_liteapi_rates(raw: Any, booking_id: str, params: Mapping[str, Any]) -> List[InventoryItem]:
+    data = raw.get("data", raw) if isinstance(raw, Mapping) else raw
+    hotels = data.get("hotels", data.get("results", [])) if isinstance(data, Mapping) else data
+    if not isinstance(hotels, Sequence) or isinstance(hotels, (str, bytes)):
+        return []
+    items: List[InventoryItem] = []
+    start = _iso_datetime(f"{params['checkin']}T15:00:00+09:00")
+    end = _iso_datetime(f"{params['checkout']}T11:00:00+09:00")
+    for hotel in hotels:
+        if not isinstance(hotel, Mapping):
+            continue
+        hotel_name = str(hotel.get("name") or hotel.get("hotelName") or "LiteAPI hotel")
+        room_types = hotel.get("roomTypes", hotel.get("rooms", []))
+        direct_rates = hotel.get("rates", [])
+        rate_pairs = [(hotel, rate) for rate in direct_rates if isinstance(rate, Mapping)]
+        for room in room_types if isinstance(room_types, Sequence) else []:
+            if isinstance(room, Mapping):
+                rate_pairs.extend((room, rate) for rate in room.get("rates", []) if isinstance(rate, Mapping))
+        for room, rate in rate_pairs:
+            try:
+                total, currency = _money_value(rate)
+                if total is None or currency != "SGD":
+                    continue
+                rate_id = str(rate.get("rateId") or rate.get("id"))
+                if not rate_id or rate_id == "None":
+                    continue
+                rating = float(hotel.get("starRating", hotel.get("rating", 4.0)) or 4.0)
+                quality = round(max(0.2, min(1.0, rating / 5.0)), 3)
+                partner = match_partner(hotel_name, category="lodging", market="JP")
+                meta: Dict[str, Any] = {"source_mode": "sandbox", "upstream": LODGING_SPEC.upstream,
+                                        "currency": "SGD", "rating": rating}
+                if partner:
+                    meta["amex_partner"] = partner
+                items.append(InventoryItem(
+                    id=f"liteapi_{rate_id}", booking_id=booking_id, kind=BookingKind.LODGING,
+                    title=f"{hotel_name} · sandbox rate",
+                    detail=str(room.get("name") or room.get("roomType") or "One adult room"),
+                    supplier=hotel_name, offer_id=rate_id, start=start, end=end,
+                    location=str(hotel.get("address") or params["city"]),
+                    place_code=str(params.get("place_code", "TYO")),
+                    cost_delta=round(total - float(params.get("refundable", 0.0)), 2),
+                    changes_booking=True, quality=quality,
+                    reliability_risk=round(0.14 - quality * 0.08, 3),
+                    action="lodging.book", compensating_action="lodging.cancel",
+                    notes=["Read from LiteAPI sandbox; any later transaction remains simulated."],
+                    source_mode="sandbox", upstream=LODGING_SPEC.upstream, amex_partner=partner,
+                    synthetic=False,
+                    meta=meta,
+                    links=([{"label": f"View {partner['program']}", "url": partner["official_url"]}]
+                           if partner else []),
+                ))
+            except (KeyError, TypeError, ValueError):
+                continue
+    return sorted(items, key=lambda item: (-item.quality, item.cost_delta, item.id))
+
+
+async def _search_uncached(
+    connector: str,
+    booking_id: str,
+    *,
+    task: Any = None,
+    itinerary: Any = None,
+    transport: Optional[JsonTransport] = None,
+    timeout: float = 6.0,
+) -> SearchResult:
+    if connector not in SPECS or connector == "status":
+        raise ValueError(f"Unsupported inventory connector: {connector}")
+    started = time.monotonic()
+    if connector == "flights":
+        result = await asyncio.to_thread(
+            _duffel_search, booking_id, itinerary=itinerary, transport=transport, timeout=timeout
+        )
+    elif connector == "lodging":
+        result = await asyncio.to_thread(
+            _liteapi_search, booking_id, itinerary=itinerary, transport=transport, timeout=timeout
+        )
+    else:
+        result = _fixture_search_result(connector, booking_id)
+    result.latency_ms = round((time.monotonic() - started) * 1000)
+    return result
+
+
+async def search_live_or_fixture(
+    connector: str,
+    booking_id: str,
+    *,
+    task: Any = None,
+    itinerary: Any = None,
+    cache: Optional[Dict[Tuple[str, str], SearchResult]] = None,
+    transport: Optional[JsonTransport] = None,
+    timeout: float = 6.0,
+) -> SearchResult:
+    """Read sandbox inventory when configured, otherwise return complete fixtures.
+
+    ``cache`` should be a fresh dictionary owned by one planning request.
+    """
+    context = SearchContext(transport=transport, timeout=timeout, cache=cache if cache is not None else {})
+    return await context.search(connector, booking_id, task=task, itinerary=itinerary)
+
+
+async def connector_health(
+    key: Optional[str] = None,
+    *,
+    transport: Optional[JsonTransport] = None,
+    timeout: float = 3.0,
+) -> Dict[str, Any]:
+    """Run bounded read-only checks without exposing credentials or response data."""
+    requested = [key] if key else ["status", "flights", "lodging"]
+    unknown = [name for name in requested if name not in SPECS]
+    if unknown:
+        raise ValueError(f"Unknown connector: {unknown[0]}")
+    checks: List[Dict[str, Any]] = []
+    for name in requested:
+        started = time.monotonic()
+        if name == "status":
+            result = await asyncio.to_thread(
+                fetch_flight_status, "SQ638", "2026-09-18", timeout=timeout, transport=transport
+            )
+            mode = str(result.get("source", "fixture"))
+            count = int(result.get("flight") is not None)
+            fallback_reason = str(result.get("note", ""))
+        elif name in {"flights", "lodging"}:
+            booking_id = "bk_flight_out" if name == "flights" else "bk_hotel_tokyo"
+            search_result = await search_live_or_fixture(
+                name, booking_id, transport=transport, timeout=timeout
+            )
+            mode, count = search_result.mode, len(search_result.items)
+            fallback_reason = search_result.fallback_reason
+        else:
+            mode, count, fallback_reason = "fixture", 0, SPECS[name].availability
+        elapsed = round((time.monotonic() - started) * 1000)
+        checks.append({
+            "key": name,
+            "mode": mode,
+            "success": mode in {"live", "sandbox"} or SPECS[name].availability in {
+                "designed_fixture", "no_public_api", "approval_required"
+            },
+            "latency_ms": elapsed,
+            "candidate_count": count,
+            "error_category": fallback_reason or None,
+        })
+    return {"checked_at": datetime.now(JST).isoformat(), "checks": checks}
 
 
 def connector_for(kind: BookingKind) -> str:
@@ -788,7 +1273,7 @@ def execute(item: InventoryItem, *, idempotency_key: str) -> Dict[str, Any]:
     refunded = round(max(-item.cost_delta, 0.0), 2)
     return {
         "ok": True,
-        "mode": spec.public()["mode"],
+        "mode": spec.transaction_mode,
         "endpoint": spec.tools.get(item.action.split(".")[-1], item.action),
         "reference": reference,
         "supplier": item.supplier,

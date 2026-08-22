@@ -15,10 +15,10 @@ Local development
 
 Vite proxies ``/api`` to that port (see ``vite.config.js``).
 
-Everything is synthetic demonstration data. No booking, payment, cancellation or
-claim is real. The one exception is flight status: set ``AERODATABOX_API_KEY``
-and ``/api/flights/status`` queries AeroDataBox for real, because reading a
-flight's status is free and read-only.
+Every booking, payment, cancellation and claim is synthetic. Read-only data may
+come from AeroDataBox production status, Duffel test offers, or LiteAPI sandbox
+rates when the corresponding credential is configured; every transaction still
+runs through the fixture simulator.
 """
 
 from __future__ import annotations
@@ -32,7 +32,7 @@ from fastapi import FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 
-from .tripshield import agents, catalog, connectors, execution, explain, optimizer, orchestrator, store
+from .tripshield import ai, agents, catalog, connectors, execution, explain, optimizer, orchestrator, store
 from .tripshield.catalog import CURRENCY, DEMO_CREDENTIALS, DISCLAIMER, MEMBER
 from .tripshield.domain import BookingKind, Option, Priority
 
@@ -184,9 +184,22 @@ def profiles() -> Dict[str, Any]:
 
 @app.get(f"{API}/connectors")
 def connector_report() -> Dict[str, Any]:
-    """Which MCP servers exist, what they are clients for, and whether each is
-    running live or against fixtures right now."""
-    return {"connectors": connectors.connector_report(), "agents": agents.agent_roster()}
+    """Report the direct adapters, deterministic agents, and optional AI seam."""
+    return {
+        "connectors": connectors.connector_report(),
+        "agents": agents.agent_roster(),
+        "ai": ai.ai_status(),
+    }
+
+
+@app.get(f"{API}/connectors/health")
+async def connector_health(key: Optional[str] = None) -> Dict[str, Any]:
+    """Run bounded, read-only checks; this never books, changes, or cancels."""
+    try:
+        report = await connectors.connector_health(key, timeout=3.0)
+    except ValueError as error:
+        raise HTTPException(status_code=404, detail=str(error)) from error
+    return {**report, "ai": ai.ai_status()}
 
 
 # ---------------------------------------------------------------------------
@@ -256,6 +269,11 @@ async def build_plan(payload: PlanRequest) -> Dict[str, Any]:
         profile_id=payload.profile_id,
     )
 
+    # Supplier offer payloads are request-scoped execution state, never wire
+    # output. Freeze them on the session so approval can snapshot the exact
+    # sandbox/fixture items without introducing a process-global live cache.
+    session.inventory = result.pop("_inventory", {})
+
     session.catalogue = {o.id: o for o in _options_from(result)}
     session.last_planning = result
     session.priority = payload.priority
@@ -267,7 +285,20 @@ async def build_plan(payload: PlanRequest) -> Dict[str, Any]:
     # is the optimizer's job — so a rehydrated plan starts unscored. Ranking here
     # both fills those fields in and guarantees the ranking the client is shown
     # describes the exact objects a later approval will read.
-    ranking = optimizer.rank(list(session.plans.values()), payload.priority, payload.profile_id)
+    plans = list(session.plans.values())
+    ranking = optimizer.rank(plans, payload.priority, payload.profile_id)
+    graph_context = session.itinerary.public()
+    graph_context.update({
+        "cancelled": list(session.cancelled),
+        "assessment": result["assessment"],
+    })
+    ranking["ai"] = await ai.generate_ai_insight(
+        graph=graph_context,
+        plans=[plan.public() for plan in plans],
+        ranking=ranking,
+        member_history=catalog.PROFILES_BY_ID.get(payload.profile_id) or {},
+        safety_identifier=session.id,
+    )
     session.last_ranking = ranking
 
     return {
@@ -294,6 +325,19 @@ def rerank(
 
     plans = list(session.plans.values())
     ranking = optimizer.rank(plans, priority, profile_id)
+    ranking["ai"] = {
+        "status": "not_requested",
+        "provider": None,
+        "model": None,
+        "transport": "in_process",
+        "tools_used": [],
+        "recommended_plan_id": ranking.get("recommended_plan_id"),
+        "ranking_rationale": None,
+        "member_explanation": None,
+        "contextual_judgements": {"flight": "", "activity": ""},
+        "latency_ms": 0,
+        "error_code": None,
+    }
     session.last_ranking = ranking
     session.priority = priority
     session.profile_id = profile_id
@@ -379,7 +423,9 @@ def approve(payload: ApproveRequest) -> Dict[str, Any]:
             detail="That plan leaves a hard dependency unsatisfied and cannot be approved.",
         )
 
-    run = execution.build_run(session.itinerary, plan, session.catalogue)
+    run = execution.build_run(
+        session.itinerary, plan, session.catalogue, inventory=session.inventory
+    )
     session.runs[run.id] = run
 
     # Written at approval, not at execution. The question worth answering months
@@ -397,6 +443,17 @@ def approve(payload: ApproveRequest) -> Dict[str, Any]:
         run_id=run.id,
     )
     record["id"] = f"AUD-{len(session.audit) + 1:04d}"
+    # AI prose is supplementary to the deterministic recommendation. Capture
+    # its provenance separately without pretending it is a ranker version.
+    ai_record = ranking.get("ai")
+    if isinstance(ai_record, dict):
+        record["ai"] = {
+            key: ai_record.get(key)
+            for key in (
+                "status", "provider", "model", "transport", "tools_used",
+                "latency_ms", "error_code",
+            )
+        }
     session.audit.append(record)
     run.log.append(
         f"Audit {record['id']} written — "
@@ -496,6 +553,9 @@ def _options_from(result: Dict[str, Any]) -> List[Option]:
             for key, value in row.items()
             if key in _OPTION_FIELDS
         }
+        # Private execution state is stored separately on the session and is
+        # intentionally absent from Option.public().
+        payload.setdefault("inventory_snapshot", {})
         missing = _OPTION_FIELDS - payload.keys()
         if missing:
             raise HTTPException(

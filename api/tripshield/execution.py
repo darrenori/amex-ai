@@ -46,6 +46,7 @@ def build_run(
     itinerary: Itinerary,
     plan: RecoveryPlan,
     catalogue: Dict[str, Option],
+    inventory: Optional[Dict[str, Dict[str, Any]]] = None,
 ) -> ExecutionRun:
     """Freeze the approved plan into an ordered, executable snapshot.
 
@@ -91,8 +92,8 @@ def build_run(
             agent=option.agent,
             title=option.title,
             detail=option.detail,
-            action=f"{spec.server} · {_endpoint(spec, action)}",
-            compensating_action=f"{spec.server} · {_endpoint(spec, compensating)}",
+            action=f"{spec.adapter} · {_endpoint(spec, action)}",
+            compensating_action=f"{spec.adapter} · {_endpoint(spec, compensating)}",
             amount=option.cost_delta,
             requires_payment=requires_payment,
         ))
@@ -103,12 +104,26 @@ def build_run(
         steps=steps,
         state=RunState.APPROVED,
         approved_at=datetime.now(JST),
+        inventory={
+            option_id: dict((inventory or {})[option_id])
+            for option_id in plan.selections.values()
+            if option_id in (inventory or {})
+        },
     )
     run.log.append(
         f"Plan {plan.id} v{plan.version} approved — {len(steps)} transaction"
         f"{'' if len(steps) == 1 else 's'} queued in dependency order."
     )
     return run
+
+
+def _run_item(run: ExecutionRun, option_id: str):
+    """Resolve the exact approved offer, including request-local sandbox reads."""
+
+    snapshot = run.inventory.get(option_id)
+    if snapshot:
+        return connectors.inventory_item_from_snapshot(snapshot)
+    return connectors.INVENTORY_BY_ID.get(option_id)
 
 
 # ---------------------------------------------------------------------------
@@ -146,7 +161,7 @@ def advance(run: ExecutionRun, *, approve_payment: bool = False) -> Dict[str, An
         run.log.append(f"{step.title} needs a payment authorisation before it can be committed.")
         return {"changed": True, "step": step.public(), "reason": "awaiting_payment"}
 
-    item = connectors.INVENTORY_BY_ID.get(step.option_id)
+    item = _run_item(run, step.option_id)
     if item is None:
         step.state = StepState.FAILED
         step.log.append("Inventory item is no longer available upstream.")
@@ -191,7 +206,7 @@ def rollback_quote(run: ExecutionRun) -> Dict[str, Any]:
     for step in reversed(run.steps):
         if step.state is not StepState.DONE:
             continue
-        item = connectors.INVENTORY_BY_ID.get(step.option_id)
+        item = _run_item(run, step.option_id)
         if item is None:
             continue
         quote = connectors.cancellation_quote(item, step.result)
@@ -253,7 +268,7 @@ def cancel(run: ExecutionRun, *, rollback: bool) -> Dict[str, Any]:
     for step in reversed(run.steps):
         if step.state is not StepState.DONE:
             continue
-        item = connectors.INVENTORY_BY_ID.get(step.option_id)
+        item = _run_item(run, step.option_id)
         if item is None:
             step.state = StepState.COMPENSATION_FAILED
             step.log.append("Cannot compensate — the supplier reference is no longer resolvable.")

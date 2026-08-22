@@ -31,6 +31,7 @@ class Session:
     itinerary: Itinerary
     cancelled: List[str] = field(default_factory=list)
     catalogue: Dict[str, Option] = field(default_factory=dict)   # option_id -> Option
+    inventory: Dict[str, dict] = field(default_factory=dict)    # option_id -> supplier snapshot
     plans: Dict[str, RecoveryPlan] = field(default_factory=dict)
     runs: Dict[str, ExecutionRun] = field(default_factory=dict)
     last_planning: Optional[dict] = None

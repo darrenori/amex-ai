@@ -53,7 +53,7 @@ a number no single supplier is in a position to tell the member.
 | 2 | **Reconstruct** | The booking history rebuilds the itinerary and the edges between its parts. |
 | 3 | **Assess** | The cancellation is propagated. Hard violations invalidate; soft violations degrade. |
 | 4 | **Create tasks** | One per affected booking, carrying the real constraint its own edge demands. |
-| 5 | **Delegate** | Five specialized agents fan out concurrently over their MCP connectors. |
+| 5 | **Delegate** | Five specialized agents fan out concurrently over their connector adapters. |
 | 6 | **Assemble** | Options are combined into *whole* candidate plans, one per strategy per flight. |
 | 7 | **Optimize** | Pareto front, then a scalarised score under a chosen or inferred weighting. |
 | 8 | **Adjust** | The member rearranges by hand; the server revalidates every change. |
@@ -132,40 +132,87 @@ is not a low-risk plan just because the flight is. Released bookings stay in tha
 product, because giving up a reserved transfer does not make the evening more
 reliable — it puts the member on an unmanaged fallback.
 
-## Real APIs
+## Connectors, MCP and model assistance
 
-Every connector is declared against a real, currently-available product, and every tool
-name maps to a real endpoint on it.
+TripShield has two deliberately separate integration surfaces:
 
-| Connector | Upstream | Mode | Key endpoints |
-| --- | --- | --- | --- |
-| `status` | [AeroDataBox](https://doc.aerodatabox.com/) | **live** with a key | `GET /flights/number/{number}/{date}` |
-| `flights` | [Duffel](https://duffel.com/docs/api/order-cancellations) | fixture | `POST /air/order_change_requests`, `POST /air/order_cancellations` |
-| `lodging` | [LiteAPI (Nuitée)](https://docs.liteapi.travel/reference/overview) | fixture | `POST /rates/prebook`, `POST /rates/book`, `PUT /bookings/{id}/cancel` |
-| `activities` | [Viator Partner API](https://docs.viator.com/partner-api/technical/) | fixture | `POST /bookings/cancel-quote`, `POST /bookings/cancel` |
-| `dining` | TableCheck | fixture | `PATCH /reservations/{id}` |
-| `ground` | JR East | fixture | `POST /reservations` |
+- Travel inventory and status use direct REST connector adapters. Each read reports
+  `live`, `sandbox`, or `fixture` provenance and falls back to complete fixture inventory
+  when credentials, availability, currency, or an upstream response are unusable.
+- Claude and GPT-5.6 Sol share one embedded, request-bound **TripShield Context MCP**.
+  Its three tools (`get_trip_graph`, `list_candidate_plans`, and
+  `get_member_choice_history`) are read-only. A model can explain a deterministic
+  recommendation; it cannot alter feasibility, scores, ordering, reason codes, approval,
+  or execution.
 
-Detection runs **live** against AeroDataBox as soon as `AERODATABOX_API_KEY` is set,
-because reading a flight's status is free and read-only:
+| Adapter | Read path | Transaction path |
+| --- | --- | --- |
+| [AeroDataBox](https://doc.aerodatabox.com/) | Production flight status with a key; otherwise recorded fixture | Fixture only |
+| [Duffel](https://duffel.com/docs/api/offer-requests) | Test-mode offer requests; otherwise fixture offers | Fixture only |
+| [LiteAPI](https://docs.liteapi.travel/reference/overview) | Sandbox hotel rates; otherwise fixture rates | Fixture only |
+| Activities | Fixture inventory | Fixture only |
+| Dining | Fixture inventory | Fixture only |
+| Ground | Fixture inventory | Fixture only |
+
+Viator documents an official [Experiences MCP](https://docs.viator.com/partner-api/mcp/),
+but access and integration are deferred. TableCheck and JR East do not provide a stable,
+self-serve booking API selected for this build. TripShield does not scrape those sites—or
+any supplier site—at runtime.
+
+There is no FX feed in this release, so non-SGD inventory is rejected instead of being
+converted with a guessed rate. No Amex member-account, Card transaction, entitlement,
+payment, or booking API is connected; those records remain synthetic demonstration data.
+
+### Synthetic dummy data used for missing sources
+
+The app is intentionally complete without external credentials. Whenever a source is
+unavailable, it uses deterministic **synthetic dummy data** rather than scraping a site,
+guessing a value, or returning a partly populated plan. Fixture options are explicitly
+returned with `source_mode: "fixture"` and `synthetic: true`; authenticated API results
+use `synthetic: false`. `/api/connectors` also publishes the fallback type for every
+adapter.
+
+| Missing or unavailable source | Synthetic dummy data included |
+| --- | --- |
+| Amex member and Card APIs | One fictional member, demo credentials, balances, four benefits and six statement transactions |
+| Booking-history API | Seven fictional bookings with references, prices, refund rules and dependency edges |
+| AeroDataBox credential or outage | Two recorded-format flight-status fixtures, including the SQ638 cancellation |
+| Duffel credential, outage or unusable offers | Six deterministic flight options with timings, SGD prices, risk and change rules |
+| LiteAPI credential, outage or unusable rates | Four deterministic lodging options with dates, SGD prices and cancellation rules |
+| Viator approval | Four deterministic activity options, including re-date and refund alternatives |
+| TableCheck public API | Four deterministic dining alternatives |
+| JR East/ground booking API | Five deterministic transfer alternatives |
+| Member-choice history | Three fictional preference histories used by the deterministic ranker |
+| Supplier transactions and refunds | Fixture receipts, authorisations, cancellation quotes and compensation results; nothing is charged or cancelled |
+
+These fixtures are demo inputs, not cached claims about current availability. Real
+carrier, hotel and attraction names are used only to make the scenario understandable;
+the availability, price, member relationship, booking reference and transaction outcome
+are invented.
+
+Amex program labels are conservative. A supplier receives an Amex badge only after an
+exact name or explicit-alias match against the curated catalog in
+`api/tripshield/amex_partners.py`. The catalog is maintained from official Amex pages,
+stores its verification date, and is never refreshed by runtime scraping.
+
+Configure any subset of these environment variables; the app remains fully usable
+without them:
 
 ```bash
-AERODATABOX_API_KEY=your_rapidapi_key npm run dev:api
+AERODATABOX_API_KEY=your_rapidapi_key
+DUFFEL_ACCESS_TOKEN=duffel_test_token
+LITEAPI_SANDBOX_KEY=liteapi_sandbox_key
+ANTHROPIC_API_KEY=anthropic_key
+OPENAI_API_KEY=openai_key
+AI_PROVIDER=anthropic              # or openai; optional
+ANTHROPIC_MODEL=claude-sonnet-5    # optional
+OPENAI_MODEL=gpt-5.6-sol           # optional
+AI_TIMEOUT_SECONDS=8               # optional
 ```
 
-Without it, the sweep replays a recorded response in the same shape. The status
-vocabulary is AeroDataBox's own — `Expected`, `EnRoute`, `Boarding`, `Departed`,
-`Delayed`, `Arrived`, `Canceled`, `Diverted`, `CanceledUncertain`.
-
-Booking transactions stay on fixtures deliberately: a demonstration must not transact
-against live inventory. Duffel's two-phase cancellation (quote first, confirm second) and
-Viator's `cancel-quote` / `cancel` split are modelled faithfully, because they are exactly
-why rollback cannot be treated as "just undo it".
-
-> **Note on Amadeus.** The obvious choice for this stack used to be the Amadeus
-> Self-Service APIs. Amadeus [decommissioned that portal on 17 July 2026](https://www.phocuswire.com/amadeus-shut-down-self-service-apis-portal-developers);
-> keys no longer return data. Duffel and LiteAPI are the current alternatives with real
-> free sandboxes.
+When `AI_PROVIDER` is unset, Anthropic is preferred when configured, then OpenAI. An
+explicitly selected provider never silently fails over to the other provider. Model
+errors or invalid output are discarded and the deterministic explanation remains.
 
 ## Cancel means two different things
 
@@ -185,8 +232,12 @@ decides, not after.
 
 ```bash
 npm install
-python -m venv .venv && .venv/Scripts/python -m pip install -r requirements.txt
+python3 -m venv .venv
+.venv/bin/python -m pip install -r requirements.txt
 ```
+
+Python **3.10 or newer** is required by MCP v2; Python 3.12 is recommended. On Windows,
+use `.venv\Scripts\python` in place of `.venv/bin/python`.
 
 Two processes, in separate terminals:
 
@@ -222,7 +273,10 @@ api/tripshield/
   domain.py                   Types shared by everything below
   catalog.py                  The demonstration booking history
   graph.py                    Dependency graph, impact propagation, node splicing
-  connectors.py               MCP-style clients onto the real travel APIs
+  connectors.py               Direct REST adapters and deterministic fallbacks
+  amex_partners.py            Curated, officially verified Amex partner matches
+  mcp_server.py               One embedded read-only MCP for model context
+  ai.py                       Claude/OpenAI explanation adapters and validation
   agents.py                   Five specialized recovery subagents
   optimizer.py                Pareto front and scalarised ranking
   orchestrator.py             The workflow: detect → plan → validate → approve
@@ -254,7 +308,8 @@ DESIGN.md                     The American Express design system this is built o
 | `POST` | `/api/auth/login` | Demo credential check |
 | `GET` | `/api/account` | Member, card, transactions, benefits, trip |
 | `GET` | `/api/bookings` | The single source of truth — every booking on one Card |
-| `GET` | `/api/connectors` | Which MCP servers exist and whether each is live |
+| `GET` | `/api/connectors` | Adapter read/transaction modes plus AI/MCP status |
+| `GET` | `/api/connectors/health` | Bounded, sanitized read-only upstream checks |
 | `GET` | `/api/flights/status` | Passthrough to the flight-status connector |
 | `POST` | `/api/disruption/detect` | Sweep every upcoming flight |
 | `GET` | `/api/graph` | The graph plus each node's fate under the disruption |
@@ -282,12 +337,30 @@ one — runs record transactions that actually happened and must never be recons
 from seed data. Production would put them in Postgres and key compensation off the
 transaction log; the interface in `store.py` is already that shape.
 
+## Verification
+
+The default suite is offline and uses mocked upstream/model responses:
+
+```bash
+.venv/bin/python -m pytest
+npm run build
+```
+
+Credentialed read-path smoke tests are opt-in and never book anything:
+
+```bash
+.venv/bin/python -m pytest -m live
+```
+
+Each live check skips itself when its corresponding AeroDataBox, Duffel, or LiteAPI
+credential is absent.
+
 ## Provenance
 
-Every price, seat, reference, member and availability figure is synthetic. The carriers,
-routes, properties and attractions are real and really do connect the way they are
-modelled. The API endpoint paths, status vocabularies and two-phase cancellation flows
-are taken from the live products named above.
+Booking references, member data and all executed transactions are synthetic. Search
+options may come from authenticated production/sandbox read paths and carry explicit
+provenance; fallback options remain fixtures. Amex partner claims come only from the
+reviewed official-source catalog, never from fuzzy matching or runtime scraping.
 
 ## Licence
 

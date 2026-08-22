@@ -6,7 +6,9 @@ Layering, top to bottom:
     api/index.py          HTTP surface
     orchestrator.py       workflow: detect -> reconstruct -> plan -> approve -> execute
     agents.py             specialized recovery subagents
-    connectors.py         MCP-style clients onto real travel APIs
+    connectors.py         direct REST adapters plus deterministic fixtures
+    mcp_server.py          embedded read-only context tools for model clients
+    ai.py                  optional Claude / OpenAI explanation adapters
     graph.py              dependency graph and impact propagation
     optimizer.py          multi-objective ranking of candidate plans
     execution.py          transactional execution and compensation
@@ -18,4 +20,7 @@ endpoint paths, status vocabularies, two-phase cancellation quotes — are taken
 from the real APIs named in ``connectors.py``.
 """
 
-__all__ = ["domain", "catalog", "graph", "connectors", "agents", "optimizer", "orchestrator", "execution", "store"]
+__all__ = [
+    "domain", "catalog", "graph", "connectors", "agents", "optimizer",
+    "orchestrator", "execution", "store", "mcp_server", "ai",
+]

@@ -168,10 +168,40 @@
 }
 
 .conn-upstream { display: block; margin-top: 2px; font-size: var(--text-xs); color: var(--ink-muted); }
+.conn-availability { display: block; font-size: var(--text-xs); color: var(--ink-muted); }
 .tool-list { display: flex; flex-direction: column; gap: var(--space-1); }
 .tool-list li { display: flex; flex-wrap: wrap; gap: var(--space-2); align-items: baseline; }
 .tool-list code { font-size: var(--text-xs); color: var(--ink-muted); }
 .conn-docs { display: inline-block; margin-top: var(--space-2); font-size: var(--text-xs); }
+
+.runtime-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: var(--space-3);
+  margin-top: var(--space-4);
+}
+
+.runtime-card {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  padding: var(--space-3);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  background: var(--surface-1);
+  font-size: var(--text-xs);
+  color: var(--ink-muted);
+}
+
+.runtime-card strong { color: var(--ink); font-size: var(--text-sm); }
+.runtime-card code { overflow-wrap: anywhere; color: var(--ink-subdued); }
+.runtime-label {
+  color: var(--primary-pressed);
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
 
 .agent-row { display: flex; flex-wrap: wrap; gap: var(--space-2); margin-top: var(--space-4); }
 
@@ -278,6 +308,45 @@
 .plan-card.is-recommended { border-color: var(--primary); box-shadow: 0 0 0 1px var(--primary), var(--shadow-card); }
 .plan-card.is-invalid { opacity: 0.72; border-style: dashed; }
 
+.ai-explanation {
+  margin-top: var(--space-4);
+  padding: var(--space-4);
+  border: 1px solid var(--primary);
+  border-radius: var(--radius-md);
+  background: var(--primary-soft);
+}
+
+.ai-explanation-head {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--space-3);
+  align-items: flex-start;
+}
+
+.ai-explanation-head strong { display: block; margin-top: 2px; font-size: var(--text-sm); }
+.ai-kicker {
+  display: block;
+  color: var(--primary-pressed);
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.ai-meta { color: var(--ink-subdued); font-size: var(--text-xs); text-align: right; }
+.ai-explanation > p { margin-top: var(--space-3); color: var(--ink-muted); font-size: var(--text-sm); }
+.ai-explanation .ai-member-copy { color: var(--ink); }
+.ai-explanation .ai-tools { font-size: var(--text-xs); }
+.ai-tools span { font-weight: 600; }
+.ai-tools code {
+  display: inline-block;
+  margin: 2px 0 0 var(--space-1);
+  padding: 1px var(--space-1);
+  border-radius: var(--radius-sm);
+  background: var(--canvas);
+  color: var(--ink-subdued);
+}
+
 .plan-badges { display: flex; flex-wrap: wrap; gap: var(--space-2); }
 
 .badge-pareto, .badge-invalid {
@@ -323,6 +392,20 @@
 .touch-main { min-width: 0; }
 .touch-title { display: block; font-size: var(--text-sm); }
 .touch-meta { display: block; margin-top: 2px; font-size: var(--text-xs); color: var(--ink-muted); font-variant-numeric: tabular-nums; }
+
+.amex-partner-badge {
+  display: inline-flex;
+  margin-left: var(--space-1);
+  padding: 1px var(--space-2);
+  border: 1px solid var(--primary);
+  border-radius: var(--radius-pill);
+  background: var(--primary-soft);
+  color: var(--primary-pressed);
+  font-size: 10px;
+  font-weight: 600;
+  line-height: 1.5;
+  vertical-align: middle;
+}
 
 .plan-violations { display: flex; flex-direction: column; gap: var(--space-2); }
 
@@ -658,6 +741,11 @@
 }
 
 /* ---------- Motion ---------- */
+
+@media (max-width: 640px) {
+  .ai-explanation-head { flex-direction: column; }
+  .ai-meta { text-align: left; }
+}
 
 @media (prefers-reduced-motion: reduce) {
   .stage-tab,

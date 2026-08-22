@@ -16,6 +16,48 @@ import { collectLinks, partnerLinksMarkup } from './partners.js';
 
 const OBJECTIVE_DOMAIN = { cost: 700, hours: 48, changed: 7, risk: 0.5 };
 
+function amexPartnerBadge(partner) {
+  if (!partner) return '';
+  const program = partner.program ?? partner.amex_program ?? 'Amex partner';
+  return `<span class="amex-partner-badge" title="Verified against the curated Amex partner catalog">${escapeHtml(program)}</span>`;
+}
+
+function amexPartnerLinks(options) {
+  const seen = new Map();
+  options.forEach((option) => {
+    const partner = option.amex_partner;
+    if (!partner) return;
+    const url = partner.official_url ?? partner.url;
+    if (!url || seen.has(url)) return;
+    const name = partner.canonical_name ?? partner.name ?? option.supplier;
+    seen.set(url, { label: `${name} · ${partner.program ?? partner.amex_program ?? 'Amex partner'}`, url });
+  });
+  return [...seen.values()];
+}
+
+function aiExplanationMarkup(ai) {
+  if (!ai || ai.status !== 'generated') return '';
+  const tools = Array.isArray(ai.tools_used) ? ai.tools_used : [];
+  const latency = Number.isFinite(Number(ai.latency_ms)) ? `${Math.round(Number(ai.latency_ms))} ms` : '';
+  const metadata = [ai.provider, ai.model, tools.length ? `${tools.length} MCP tools` : '', latency].filter(Boolean);
+  const rationale = ai.ranking_rationale ?? ai.rationale ?? '';
+  const memberExplanation = ai.member_explanation ?? ai.explanation ?? '';
+
+  return `
+    <aside class="ai-explanation" aria-label="AI explanation of the deterministic recommendation">
+      <div class="ai-explanation-head">
+        <div>
+          <span class="ai-kicker">Model-assisted explanation</span>
+          <strong>Context for the deterministic recommendation</strong>
+        </div>
+        ${metadata.length ? `<span class="ai-meta">${metadata.map(escapeHtml).join(' · ')}</span>` : ''}
+      </div>
+      ${rationale ? `<p>${escapeHtml(rationale)}</p>` : ''}
+      ${memberExplanation && memberExplanation !== rationale ? `<p class="ai-member-copy">${escapeHtml(memberExplanation)}</p>` : ''}
+      ${tools.length ? `<p class="ai-tools"><span>Read-only context:</span> ${tools.map((tool) => `<code>${escapeHtml(tool?.name ?? tool)}</code>`).join(' ')}</p>` : ''}
+    </aside>`;
+}
+
 function bar(value, domain, tone) {
   const width = Math.min(Math.abs(value) / domain, 1) * 100;
   return `<span class="obj-track"><span class="obj-fill ${tone}" style="width:${width.toFixed(1)}%"></span></span>`;
@@ -88,7 +130,10 @@ function planCard(plan, { recommended, currency, optionsById, codes = [] }) {
             <span class="icon-badge ${option.drops_booking ? 'critical' : 'neutral'}" aria-hidden="true">${kindIcon[option.kind] ?? icons.plane}</span>
             <span class="touch-main">
               <span class="touch-title">${escapeHtml(option.title)}</span>
-              <span class="touch-meta">${escapeHtml(option.supplier)} · ${escapeHtml(signedMoney(option.cost_delta, currency))}</span>
+              <span class="touch-meta">
+                ${escapeHtml(option.supplier)} · ${escapeHtml(signedMoney(option.cost_delta, currency))}
+                ${amexPartnerBadge(option.amex_partner)}
+              </span>
             </span>
           </li>`).join('')}
       </ul>
@@ -109,7 +154,10 @@ function planCard(plan, { recommended, currency, optionsById, codes = [] }) {
 
       <p class="plan-score">${escapeHtml(plan.score_breakdown)}</p>
 
-      ${partnerLinksMarkup(collectLinks(touched.map((t) => t.option)), { label: 'With your Card' })}
+      ${partnerLinksMarkup([
+        ...collectLinks(touched.map((t) => t.option)),
+        ...amexPartnerLinks(touched.map((t) => t.option)),
+      ], { label: 'With your Card' })}
 
       <div class="plan-actions">
         <button class="btn btn-ghost" type="button" data-edit-plan="${escapeHtml(plan.id)}">Adjust this plan</button>
@@ -188,6 +236,8 @@ export function plansMarkup(plans, ranking, currency, optionsById) {
     </div>
 
     <p class="explain">${escapeHtml(ranking.explanation)}</p>
+
+    ${aiExplanationMarkup(ranking.ai)}
 
     <div class="plan-grid">
       ${ordered.map((plan) => planCard(plan, {
