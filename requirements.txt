@@ -1,4 +1,6 @@
-fastapi==0.115.12
+# MCP 2 requires Starlette >=0.48 on Python 3.14. FastAPI 0.117.1 is
+# the first pinned release here whose Starlette range intersects that safely.
+fastapi==0.117.1
 uvicorn[standard]==0.34.0
 pytest==8.3.5
 httpx==0.28.1
