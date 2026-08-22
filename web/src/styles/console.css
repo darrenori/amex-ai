@@ -108,13 +108,11 @@
 .sweep-main { flex: 1; min-width: 0; }
 .sweep-flight { display: block; font-size: var(--text-sm); font-weight: 600; font-variant-numeric: tabular-nums; }
 
-.sweep-endpoint {
+.sweep-meta {
   display: block;
   margin-top: 2px;
-  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
   font-size: var(--text-xs);
   color: var(--ink-muted);
-  word-break: break-all;
 }
 
 .alert-tight { margin-top: var(--space-4); }

@@ -2,7 +2,7 @@
 //
 // Five stages, in the order the workflow actually runs:
 //
-//   1  Detect    sweep the member's flights against a flight-status API
+//   1  Detect    check the member's flights for important travel changes
 //   2  Impact    reconstruct the dependency graph and propagate the breakage
 //   3  Plan      compare whole candidate plans, ranked under a chosen weighting
 //   4  Adjust    rearrange one by hand, revalidated server-side on every change
@@ -15,7 +15,7 @@ import { api } from '../api.js';
 import { escapeHtml, money } from '../format.js';
 import { icons } from '../icons.js';
 import { closeModal, openModal } from '../components/modal.js';
-import { connectorMarkup, detectMarkup } from './detect.js';
+import { detectMarkup } from './detect.js';
 import { graphMarkup, impactMarkup } from './graph.js';
 import { traceMarkup } from './trace.js';
 import { historyMarkup, plansMarkup, weightingMarkup } from './plans.js';
@@ -36,7 +36,6 @@ export function renderRecovery(container, { profiles, currency, onBack, announce
     reached: new Set(['detect']),
     detection: null,
     graph: null,
-    connectors: null,
     planning: null,
     ranking: null,
     priority: 'inferred',
@@ -121,9 +120,8 @@ export function renderRecovery(container, { profiles, currency, onBack, announce
   async function loadDetection() {
     busy('Sweeping every upcoming flight on this trip…');
     try {
-      const [detection, connectors] = await Promise.all([api.detect(), api.connectors()]);
+      const detection = await api.detect();
       state.detection = detection;
-      state.connectors = connectors;
       paint();
       const found = detection.disruptions[0];
       announce(found
@@ -137,12 +135,7 @@ export function renderRecovery(container, { profiles, currency, onBack, announce
   function paintDetect() {
     if (!state.detection) return loadDetection();
     body.innerHTML = `
-      ${detectMarkup(state.detection, state.connectors)}
-      <div class="card">${connectorMarkup(
-        state.connectors.connectors,
-        state.connectors.agents,
-        state.connectors,
-      )}</div>
+      ${detectMarkup(state.detection)}
       <div class="stage-next">
         <button class="btn btn-primary" type="button" id="toImpact">
           See what it reaches ${icons.arrowRight}
