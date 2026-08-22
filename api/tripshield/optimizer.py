@@ -1,10 +1,12 @@
 """Ranking candidate recovery plans.
 
-Three objectives, all minimised, all in units a member can argue with:
+Five objectives, all minimised, all in units a member can argue with:
 
     money       whole-trip financial impact, signed against the confirmed trip
     time        hours of the trip given up
     disruption  how many separate bookings have to be re-transacted
+    experience  value destroyed by dropping something bought for its own sake
+    fragility   compounded chance the recovery fails on the day
 
 They are not commensurable on their own, so the ranking does two things rather
 than one:
@@ -14,9 +16,12 @@ than one:
     and no preference — and it is what stops the UI presenting a plan that is
     simply worse than another plan in every respect.
 
-2.  **Scalarised score**, for ordering *within* the front:
+2.  **Scalarised score**, as an auditable baseline and model-failure fallback.
 
-        score = money + (hours × time-value) + (bookings changed × switching cost)
+Recommendation AI may personalize the ordering of validated eligible plans. Its
+IDs are checked again in this module before they can replace the baseline order.
+
+        score = money + time + churn + experience + fragility
 
     The time value is the interesting term. It is not a setting the member picks;
     it is regressed from what they actually chose the last time they had this
@@ -185,9 +190,10 @@ def _dominates(a: RecoveryPlan, b: RecoveryPlan) -> bool:
 
 def mark_pareto(plans: Iterable[RecoveryPlan]) -> List[RecoveryPlan]:
     plans = list(plans)
+    valid = [plan for plan in plans if plan.valid]
     for plan in plans:
-        plan.pareto_optimal = not any(
-            other is not plan and _dominates(other, plan) for other in plans
+        plan.pareto_optimal = plan.valid and not any(
+            other is not plan and _dominates(other, plan) for other in valid
         )
     return plans
 
@@ -252,18 +258,10 @@ def _explain(plan: Optional[RecoveryPlan], runner_up: Optional[RecoveryPlan], we
             f"every hard dependency."
         )
 
-    front = (
-        " It is on the Pareto front — no other plan beats it on money, hours, churn and "
-        "experience given up all at once."
-        if plan.pareto_optimal
-        else " It is not Pareto-optimal: another plan matches or beats it on every objective, "
-             "so it leads on this weighting rather than outright."
-    )
-
     return (
         f"{plan.name} leads under “{weights.label}”. It {money_text}, gives up "
         f"{m.hours_lost:g} hours and re-transacts {m.bookings_changed} "
-        f"booking{'' if m.bookings_changed == 1 else 's'}, scoring {money(plan.score)}.{tail}{front}"
+        f"booking{'' if m.bookings_changed == 1 else 's'}, scoring {money(plan.score)}.{tail}"
     )
 
 
@@ -282,3 +280,60 @@ def _notification(plan: Optional[RecoveryPlan]) -> str:
         f"touching {m.bookings_changed} booking{'' if m.bookings_changed == 1 else 's'}. "
         "Every alternative is one tap away."
     )
+
+
+def apply_personalized_ranking(
+    plans: Sequence[RecoveryPlan],
+    ranking: Dict,
+    ai_result: Dict,
+) -> Dict:
+    """Apply a validated model order while preserving deterministic fallback.
+
+    ``ai_agents`` performs the first strict schema and ID validation. This
+    second gate sits beside the optimizer so a future caller cannot bypass plan
+    validity or eligibility accidentally.
+    """
+
+    baseline_order = list(ranking.get("order", []))
+    ranking["deterministic_order"] = baseline_order
+    ranking["deterministic_recommended_plan_id"] = ranking.get("recommended_plan_id")
+    ranking["deterministic_explanation"] = ranking.get("explanation")
+    by_id = {plan.id: plan for plan in plans}
+    eligible = {
+        plan.id for plan in plans
+        if plan.valid and plan.pareto_optimal
+    } or {plan.id for plan in plans if plan.valid}
+    ranking["eligible_plan_ids"] = [
+        plan_id for plan_id in baseline_order if plan_id in eligible
+    ]
+
+    if ai_result.get("status") == "generated":
+        requested = ai_result.get("ordered_plan_ids")
+        recommended_id = ai_result.get("recommended_plan_id")
+        valid_order = (
+            isinstance(requested, list)
+            and len(requested) == len(set(requested))
+            and set(requested) == eligible
+            and bool(requested)
+            and requested[0] == recommended_id
+        )
+        if valid_order:
+            ranking["order"] = [
+                *requested,
+                *(plan_id for plan_id in baseline_order if plan_id not in requested),
+            ]
+            ranking["recommended_plan_id"] = recommended_id
+            ranking["explanation"] = ai_result.get("member_explanation") or ranking["explanation"]
+            ranking["notification"] = _notification(by_id.get(recommended_id))
+            ranking["recommendation_mode"] = "ai_personalized"
+        else:
+            ai_result = {
+                **ai_result,
+                "status": "failed",
+                "error_code": "optimizer_validation_failed",
+            }
+
+    if ai_result.get("status") != "generated":
+        ranking["recommendation_mode"] = "deterministic_fallback"
+    ranking["ai"] = ai_result
+    return ranking

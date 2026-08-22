@@ -1,7 +1,8 @@
-"""Request-bound, read-only MCP context for TripShield's explanation models.
+"""Request-bound, read-only MCP context for TripShield's model agents.
 
-The model is intentionally given three narrow views over an immutable planning
-snapshot.  There are no write tools and no process-global request state.  When
+The legacy explanation helper retains three narrow views; the multi-agent path
+builds a role-specific allowlist for each specialist and the final recommender.
+All views are immutable. There are no write tools or process-global request state. When
 the MCP v2 SDK is installed, :class:`mcp.Client` connects directly to the
 returned ``MCPServer`` object in memory; importing this module remains safe in
 offline/test environments where the optional SDK is absent.
@@ -180,6 +181,84 @@ def create_mcp_server(
         ranking=ranking,
         member_history=member_history,
     )
+
+
+class RoleScopedMCP:
+    """An immutable MCP view containing only the tools allowed for one agent.
+
+    Tool results are snapshots prepared by the server after connector reads and
+    deterministic feasibility filtering. Model agents can inspect and rank those
+    facts, but cannot mutate them or call a supplier directly.
+    """
+
+    def __init__(
+        self,
+        *,
+        role: str,
+        instructions: str,
+        tools: Mapping[str, Tuple[str, Any]],
+    ) -> None:
+        if not tools:
+            raise ValueError("A role-scoped MCP must expose at least one tool")
+        self.role = role
+        self.instructions = instructions
+        self._tools = {
+            str(name): (str(description), _frozen_copy(value))
+            for name, (description, value) in tools.items()
+        }
+        self.server: Optional[Any] = self._build_sdk_server()
+
+    @property
+    def sdk_available(self) -> bool:
+        return self.server is not None and MCPClient is not None
+
+    @property
+    def tool_names(self) -> Tuple[str, ...]:
+        return tuple(self._tools)
+
+    @property
+    def tool_schemas(self) -> Tuple[MCPToolSchema, ...]:
+        empty = {"type": "object", "properties": {}, "additionalProperties": False}
+        return tuple(
+            MCPToolSchema(name, description, copy.deepcopy(empty))
+            for name, (description, _value) in self._tools.items()
+        )
+
+    def call_local_tool(self, name: str) -> Any:
+        try:
+            _description, value = self._tools[name]
+        except KeyError as exc:
+            raise KeyError("Unknown role-scoped TripShield MCP tool") from exc
+        return _thaw(value)
+
+    def _build_sdk_server(self) -> Optional[Any]:
+        if MCPServer is None:
+            return None
+
+        server = MCPServer(f"TripShield-{self.role}", instructions=self.instructions)
+        for schema in self.tool_schemas:
+            def make_reader(tool_name: str):
+                def read_snapshot() -> dict:
+                    return self.call_local_tool(tool_name)
+
+                return read_snapshot
+
+            read_snapshot = make_reader(schema.name)
+            read_snapshot.__name__ = schema.name
+            read_snapshot.__doc__ = schema.description
+            server.tool(name=schema.name, description=schema.description)(read_snapshot)
+        return server
+
+
+def create_role_scoped_mcp(
+    *,
+    role: str,
+    instructions: str,
+    tools: Mapping[str, Tuple[str, Any]],
+) -> RoleScopedMCP:
+    """Create one isolated read-only tool surface for one model-agent call."""
+
+    return RoleScopedMCP(role=role, instructions=instructions, tools=tools)
 
 
 def mcp_sdk_available() -> bool:

@@ -32,7 +32,7 @@ from fastapi import FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 
-from .tripshield import ai, agents, catalog, connectors, execution, explain, optimizer, orchestrator, store
+from .tripshield import ai, ai_agents, agents, catalog, connectors, execution, explain, optimizer, orchestrator, store
 from .tripshield.catalog import CURRENCY, DEMO_CREDENTIALS, DISCLAIMER, MEMBER
 from .tripshield.domain import BookingKind, Option, Priority
 
@@ -184,7 +184,7 @@ def profiles() -> Dict[str, Any]:
 
 @app.get(f"{API}/connectors")
 def connector_report() -> Dict[str, Any]:
-    """Report the direct adapters, deterministic agents, and optional AI seam."""
+    """Report direct adapters, deterministic fallbacks, and bounded AI status."""
     return {
         "connectors": connectors.connector_report(),
         "agents": agents.agent_roster(),
@@ -267,6 +267,8 @@ async def build_plan(payload: PlanRequest) -> Dict[str, Any]:
         session.cancelled,
         priority=payload.priority,
         profile_id=payload.profile_id,
+        member_history=catalog.PROFILES_BY_ID.get(payload.profile_id) or {},
+        safety_identifier=session.id,
     )
 
     # Supplier offer payloads are request-scoped execution state, never wire
@@ -275,7 +277,6 @@ async def build_plan(payload: PlanRequest) -> Dict[str, Any]:
     session.inventory = result.pop("_inventory", {})
 
     session.catalogue = {o.id: o for o in _options_from(result)}
-    session.last_planning = result
     session.priority = payload.priority
     session.profile_id = payload.profile_id
     session.plans = {p["id"]: _rehydrate(session, p) for p in result["plans"]}
@@ -292,14 +293,19 @@ async def build_plan(payload: PlanRequest) -> Dict[str, Any]:
         "cancelled": list(session.cancelled),
         "assessment": result["assessment"],
     })
-    ranking["ai"] = await ai.generate_ai_insight(
+    recommendation = await ai_agents.recommend_plans(
         graph=graph_context,
         plans=[plan.public() for plan in plans],
         ranking=ranking,
         member_history=catalog.PROFILES_BY_ID.get(payload.profile_id) or {},
+        specialist_findings=result.get("specialist_findings", []),
         safety_identifier=session.id,
     )
+    ranking = optimizer.apply_personalized_ranking(plans, ranking, recommendation)
+    result["agent_runs"] = [*result.get("specialist_findings", []), recommendation]
     session.last_ranking = ranking
+    result["ranking"] = ranking
+    session.last_planning = result
 
     return {
         **result,
@@ -312,7 +318,7 @@ async def build_plan(payload: PlanRequest) -> Dict[str, Any]:
 
 
 @app.get(f"{API}/recovery/rank")
-def rerank(
+async def rerank(
     session_id: str = "demo",
     priority: str = Priority.INFERRED.value,
     profile_id: str = "time",
@@ -325,19 +331,27 @@ def rerank(
 
     plans = list(session.plans.values())
     ranking = optimizer.rank(plans, priority, profile_id)
-    ranking["ai"] = {
-        "status": "not_requested",
-        "provider": None,
-        "model": None,
-        "transport": "in_process",
-        "tools_used": [],
-        "recommended_plan_id": ranking.get("recommended_plan_id"),
-        "ranking_rationale": None,
-        "member_explanation": None,
-        "contextual_judgements": {"flight": "", "activity": ""},
-        "latency_ms": 0,
-        "error_code": None,
-    }
+    graph_context = session.itinerary.public()
+    graph_context.update({
+        "cancelled": list(session.cancelled),
+        "assessment": (session.last_planning or {}).get("assessment", {}),
+    })
+    recommendation = await ai_agents.recommend_plans(
+        graph=graph_context,
+        plans=[plan.public() for plan in plans],
+        ranking=ranking,
+        member_history=catalog.PROFILES_BY_ID.get(profile_id) or {},
+        specialist_findings=(session.last_planning or {}).get("specialist_findings", []),
+        safety_identifier=session.id,
+    )
+    ranking = optimizer.apply_personalized_ranking(plans, ranking, recommendation)
+    agent_runs = [
+        *(session.last_planning or {}).get("specialist_findings", []),
+        recommendation,
+    ]
+    if session.last_planning is not None:
+        session.last_planning["agent_runs"] = agent_runs
+        session.last_planning["ranking"] = ranking
     session.last_ranking = ranking
     session.priority = priority
     session.profile_id = profile_id
@@ -345,6 +359,7 @@ def rerank(
         "currency": CURRENCY,
         "plans": [p.public() for p in plans],
         "ranking": ranking,
+        "agent_runs": agent_runs,
         "priority": priority,
         "profile_id": profile_id,
     }
@@ -443,17 +458,30 @@ def approve(payload: ApproveRequest) -> Dict[str, Any]:
         run_id=run.id,
     )
     record["id"] = f"AUD-{len(session.audit) + 1:04d}"
-    # AI prose is supplementary to the deterministic recommendation. Capture
-    # its provenance separately without pretending it is a ranker version.
+    # Capture the final personalized recommendation and every bounded agent run
+    # as provenance. Prompts, provider credentials and raw secrets are excluded.
     ai_record = ranking.get("ai")
     if isinstance(ai_record, dict):
         record["ai"] = {
             key: ai_record.get(key)
             for key in (
                 "status", "provider", "model", "transport", "tools_used",
-                "latency_ms", "error_code",
+                "latency_ms", "error_code", "confidence",
+                "referenced_plan_ids", "referenced_option_ids",
             )
         }
+    record["agent_runs"] = [
+        {
+            key: run.get(key)
+            for key in (
+                "role", "specialty", "status", "provider", "model", "transport",
+                "tools_used", "task_ids", "latency_ms", "error_code",
+                "referenced_plan_ids", "referenced_option_ids",
+            )
+        }
+        for run in (session.last_planning or {}).get("agent_runs", [])
+        if isinstance(run, dict)
+    ]
     session.audit.append(record)
     run.log.append(
         f"Audit {record['id']} written — "

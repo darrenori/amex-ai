@@ -9,13 +9,12 @@ objective, hard constraints, its dependencies and the tools it is allowed to
 call — and returns *several* options rather than one answer. Choosing between
 them is the orchestrator's job, and ultimately the member's.
 
-Where a model belongs
----------------------
+Relationship to the model agents
+--------------------------------
 The filtering below is deterministic on purpose: a park passport whose date has
-passed is not a judgement call. The seams where an LLM subagent would slot in are
-marked ``# MODEL SEAM``. Each one is a place where the right answer depends on
-context this code cannot see — how the member has reacted to this trade-off
-before, whether a 40-minute buffer is really enough at this terminal at this hour.
+passed is not a judgement call. After this layer returns known feasible option
+IDs, ``ai_agents.py`` runs bounded specialty assessments. These classes remain
+the complete fallback when a model is unavailable or returns invalid output.
 """
 
 from __future__ import annotations
@@ -177,8 +176,7 @@ class FlightRecoveryAgent(RecoveryAgent):
         return True
 
     def rank(self, item, task):
-        # MODEL SEAM — a flight subagent with the member's history would weigh
-        # carrier, connection risk and lounge access here rather than a constant.
+        # Deterministic fallback for the model-backed flight assessment.
         priority = task.constraints.get("priority", "balanced")
         if priority == "time":
             return (item.meta.get("hours_lost", 0.0), item.cost_delta)
@@ -281,8 +279,7 @@ class ActivityRecoveryAgent(RecoveryAgent):
         return True
 
     def rank(self, item, task):
-        # MODEL SEAM — "is a four-hour evening pass an acceptable substitute for
-        # a full day at the park" is a preference question, not an arithmetic one.
+        # Deterministic fallback for the model-backed activity assessment.
         return (-item.quality, item.cost_delta)
 
 

@@ -53,9 +53,9 @@ a number no single supplier is in a position to tell the member.
 | 2 | **Reconstruct** | The booking history rebuilds the itinerary and the edges between its parts. |
 | 3 | **Assess** | The cancellation is propagated. Hard violations invalidate; soft violations degrade. |
 | 4 | **Create tasks** | One per affected booking, carrying the real constraint its own edge demands. |
-| 5 | **Delegate** | Five specialized agents fan out concurrently over their connector adapters. |
+| 5 | **Delegate** | Flight AI runs first; Accommodation, Activity, Dining and Ground AI then assess validated inventory concurrently. |
 | 6 | **Assemble** | Options are combined into *whole* candidate plans, one per strategy per flight. |
-| 7 | **Optimize** | Pareto front, then a scalarised score under a chosen or inferred weighting. |
+| 7 | **Recommend** | Server metrics define the eligible plans; Recommendation AI personalizes their order, with a deterministic fallback. |
 | 8 | **Adjust** | The member rearranges by hand; the server revalidates every change. |
 | 9 | **Approve** | The plan is frozen into an immutable snapshot and queued. |
 | 10 | **Execute** | One transaction at a time, in dependency order, each charge authorised on its own. |
@@ -81,11 +81,23 @@ fourth objective on the Pareto front — see below for how it is priced.
 
 ## Personalization
 
-The time-value weight is never a setting the member picks. It is regressed from
-what they actually chose the last time they had a cost/time trade-off in front of
-them — and so are their tolerance for churn and their tolerance for a plan that
-might fail on the day, because a member who waits two days for a fare drop is
-also a member who does not mind their hotel being rebooked.
+TripShield now has a bounded multi-agent recommendation path. Flight AI assesses
+the root replacement inventory first. Once the server recalculates what each
+arrival breaks, Accommodation, Activity, Dining and Ground AI agents run as four
+batched concurrent calls. The server rejects unknown IDs and assembles only plans
+that pass the dependency graph. A final Recommendation AI uses the member's
+synthetic choice history and validated specialist findings to order the eligible
+whole-trip plans and explain the trade-offs.
+
+The deterministic time-value, switching-cost and reliability weights remain as
+auditable metrics and the complete fallback. A model cannot alter supplier facts,
+feasibility, metric values, approval or execution. If one specialist fails, only
+that specialty falls back; if Recommendation AI fails, the deterministic order is
+shown and is explicitly labelled as a verified fallback.
+
+The time-value baseline is regressed from what the member chose the last time they
+had a cost/time trade-off in front of them — and so are their tolerance for churn
+and their tolerance for a plan that might fail on the day.
 
 Once the *whole trip* is priced, the same-day rebooking turns out to be the right
 answer for all three synthetic histories. That is the finding, not a limitation:
@@ -132,18 +144,18 @@ is not a low-risk plan just because the flight is. Released bookings stay in tha
 product, because giving up a reserved transfer does not make the evening more
 reliable — it puts the member on an unmanaged fallback.
 
-## Connectors, MCP and model assistance
+## Connectors, MCP and AI agents
 
 TripShield has two deliberately separate integration surfaces:
 
 - Travel inventory and status use direct REST connector adapters. Each read reports
   `live`, `sandbox`, or `fixture` provenance and falls back to complete fixture inventory
   when credentials, availability, currency, or an upstream response are unusable.
-- Claude and GPT-5.6 Sol share one embedded, request-bound **TripShield Context MCP**.
-  Its three tools (`get_trip_graph`, `list_candidate_plans`, and
-  `get_member_choice_history`) are read-only. A model can explain a deterministic
-  recommendation; it cannot alter feasibility, scores, ordering, reason codes, approval,
-  or execution.
+- Claude and GPT-5.6 Sol use embedded, request-bound **TripShield MCP** snapshots.
+  Each agent receives a role-specific read-only tool allowlist. Specialists can read
+  their own recovery tasks, cached validated inventory and member-choice context; the
+  Recommendation AI can read the graph, candidate plans, history and specialist findings.
+  Models receive no write, booking, cancellation, payment, arbitrary HTTP or scraping tool.
 
 | Adapter | Read path | Transaction path |
 | --- | --- | --- |
@@ -212,7 +224,7 @@ AI_TIMEOUT_SECONDS=8               # optional
 
 When `AI_PROVIDER` is unset, Anthropic is preferred when configured, then OpenAI. An
 explicitly selected provider never silently fails over to the other provider. Model
-errors or invalid output are discarded and the deterministic explanation remains.
+errors or invalid output are discarded and the deterministic recommendation remains.
 
 ## Cancel means two different things
 
@@ -275,10 +287,11 @@ api/tripshield/
   graph.py                    Dependency graph, impact propagation, node splicing
   connectors.py               Direct REST adapters and deterministic fallbacks
   amex_partners.py            Curated, officially verified Amex partner matches
-  mcp_server.py               One embedded read-only MCP for model context
-  ai.py                       Claude/OpenAI explanation adapters and validation
-  agents.py                   Five specialized recovery subagents
-  optimizer.py                Pareto front and scalarised ranking
+  mcp_server.py               Embedded request-bound, role-scoped read-only MCP
+  ai.py                       Provider-neutral structured model runtime
+  ai_agents.py                Five specialist agents and Recommendation AI
+  agents.py                   Feasibility, connector reads and deterministic fallbacks
+  optimizer.py                Metrics, eligibility, fallback and AI-order validation
   orchestrator.py             The workflow: detect → plan → validate → approve
   execution.py                Saga engine: sequential commit, compensation
   store.py                    Session state
@@ -314,7 +327,7 @@ DESIGN.md                     The American Express design system this is built o
 | `POST` | `/api/disruption/detect` | Sweep every upcoming flight |
 | `GET` | `/api/graph` | The graph plus each node's fate under the disruption |
 | `POST` | `/api/recovery/plan` | Create tasks, delegate, assemble and rank plans |
-| `GET` | `/api/recovery/rank` | Re-score existing plans under a different weighting |
+| `GET` | `/api/recovery/rank` | Re-score existing plans and rerun only Recommendation AI |
 | `POST` | `/api/recovery/plan/validate` | Re-check an arbitrary, possibly hand-edited plan |
 | `POST` | `/api/recovery/plan/approve` | Freeze a snapshot, queue the transactions |
 | `GET` | `/api/execution/{id}` | Run state |

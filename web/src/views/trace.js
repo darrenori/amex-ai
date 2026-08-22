@@ -91,6 +91,48 @@ function taskCard(task, optionsById) {
     </article>`;
 }
 
+function agentRunCard(run) {
+  const generated = run.status === 'generated';
+  const neutral = run.status === 'not_requested';
+  const failed = !generated && !neutral;
+  const tone = generated ? 'good' : neutral ? 'neutral' : 'critical';
+  const label = generated ? 'AI completed' : neutral ? 'No affected tasks' : 'Safe fallback used';
+  const tools = Array.isArray(run.tools_used) ? run.tools_used : [];
+  const assessments = Array.isArray(run.assessments) ? run.assessments : [];
+  const recommendationRun = run.role === 'Recommendation AI';
+  const scope = recommendationRun
+    ? `${run.eligible_plan_ids?.length ?? 0} eligible plan(s)`
+    : `${run.task_ids?.length ?? 0} task(s) · ${assessments.length} validated assessment(s)`;
+  const metadata = [
+    run.provider,
+    run.model,
+    Number.isFinite(Number(run.latency_ms)) ? `${Math.round(Number(run.latency_ms))} ms` : '',
+  ].filter(Boolean).join(' · ');
+
+  return `
+    <article class="trace-card${failed ? ' is-failed' : ''}">
+      <div class="trace-head">
+        <span class="trace-agent">${escapeHtml(run.role ?? 'Specialist AI')}</span>
+        <span class="chip chip-${tone}"><span class="dot"></span>${escapeHtml(label)}</span>
+      </div>
+      ${metadata ? `<p class="trace-objective">${escapeHtml(metadata)}</p>` : ''}
+      <p class="trace-meta">
+        ${scope}
+        ${tools.length ? ` · ${tools.length} read-only tool(s)` : ''}
+      </p>
+      ${assessments.length ? `
+        <details class="trace-rejects">
+          <summary>Agent findings (${assessments.length})</summary>
+          <ul>${assessments.map((finding) => `
+            <li class="trace-cut">
+              <span class="trace-opt">${escapeHtml(finding.recommended_option_id)}</span>
+              <span class="trace-meta">${escapeHtml(finding.rationale)}</span>
+            </li>`).join('')}</ul>
+        </details>` : ''}
+      ${!generated && !neutral ? `<p class="trace-meta">The deterministic specialist handled this stage.</p>` : ''}
+    </article>`;
+}
+
 export function traceMarkup(planning) {
   const optionsById = Object.fromEntries(planning.options.map((o) => [o.id, o]));
 
@@ -105,8 +147,19 @@ export function traceMarkup(planning) {
     seen.add(task.booking_id);
     return true;
   });
+  const agentRuns = Array.isArray(planning.agent_runs) ? planning.agent_runs : [];
+  const generatedRuns = agentRuns.filter((run) => run.status === 'generated').length;
 
   return `
+    ${agentRuns.length ? `
+      <p class="muted stage-note">
+        <strong>${generatedRuns} of ${agentRuns.length}</strong> AI workflow stages completed.
+        Any unavailable agent was replaced independently by its deterministic safety fallback.
+      </p>
+      <div class="trace-grid agent-run-grid">
+        ${agentRuns.map(agentRunCard).join('')}
+      </div>
+      <p class="inspect-divider">Validated recovery tasks and connector options</p>` : ''}
     <p class="muted stage-note">
       The cancellation produced <strong>${planning.tasks.length}</strong> recovery tasks across
       <strong>${planning.agents.length}</strong> specialized agents, returning

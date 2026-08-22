@@ -7,14 +7,19 @@
 // hotel change beside the fastest transfer — and its totals do not describe any
 // trip the member could actually take.
 //
-// The Pareto badge is the honest part of the ranking: it needs no weights at all
-// and says only that nothing else beats this plan on every objective at once.
-
 import { duration, escapeHtml, money, signedMoney, stampZoned } from '../format.js';
 import { icons, kindIcon } from '../icons.js';
 import { collectLinks, partnerLinksMarkup } from './partners.js';
 
 const OBJECTIVE_DOMAIN = { cost: 700, hours: 48, changed: 7, risk: 0.5 };
+
+function memberFacingText(value) {
+  return String(value ?? '')
+    .split('. ')
+    .filter((sentence) => !/pareto/i.test(sentence))
+    .join('. ')
+    .trim();
+}
 
 function amexPartnerBadge(partner) {
   if (!partner) return '';
@@ -36,25 +41,38 @@ function amexPartnerLinks(options) {
 }
 
 function aiExplanationMarkup(ai) {
-  if (!ai || ai.status !== 'generated') return '';
-  const tools = Array.isArray(ai.tools_used) ? ai.tools_used : [];
-  const latency = Number.isFinite(Number(ai.latency_ms)) ? `${Math.round(Number(ai.latency_ms))} ms` : '';
-  const metadata = [ai.provider, ai.model, tools.length ? `${tools.length} MCP tools` : '', latency].filter(Boolean);
-  const rationale = ai.ranking_rationale ?? ai.rationale ?? '';
-  const memberExplanation = ai.member_explanation ?? ai.explanation ?? '';
+  if (!ai) return '';
+  if (ai.status !== 'generated') {
+    return `
+      <aside class="ai-explanation" aria-label="Recommendation fallback">
+        <div class="ai-explanation-head">
+          <div>
+            <span class="ai-kicker">Verified fallback</span>
+            <strong>Your options were still checked and ranked safely</strong>
+          </div>
+        </div>
+        <p>The personalized recommendation service was unavailable, so TripShield used its validated whole-trip ranking.</p>
+      </aside>`;
+  }
+  const rationale = memberFacingText(ai.ranking_rationale ?? ai.rationale ?? '');
+  const memberExplanation = memberFacingText(ai.member_explanation ?? ai.explanation ?? '');
+  const confidence = Number.isFinite(Number(ai.confidence))
+    ? `${Math.round(Number(ai.confidence) * 100)}% confidence`
+    : '';
+  const tradeoffs = Array.isArray(ai.tradeoffs) ? ai.tradeoffs : [];
 
   return `
-    <aside class="ai-explanation" aria-label="AI explanation of the deterministic recommendation">
+    <aside class="ai-explanation" aria-label="AI personalized recommendation">
       <div class="ai-explanation-head">
         <div>
-          <span class="ai-kicker">Model-assisted explanation</span>
-          <strong>Context for the deterministic recommendation</strong>
+          <span class="ai-kicker">Personalized by AI</span>
+          <strong>Recommended from your valid whole-trip options</strong>
         </div>
-        ${metadata.length ? `<span class="ai-meta">${metadata.map(escapeHtml).join(' · ')}</span>` : ''}
+        ${confidence ? `<span class="ai-meta">${escapeHtml(confidence)}</span>` : ''}
       </div>
       ${rationale ? `<p>${escapeHtml(rationale)}</p>` : ''}
       ${memberExplanation && memberExplanation !== rationale ? `<p class="ai-member-copy">${escapeHtml(memberExplanation)}</p>` : ''}
-      ${tools.length ? `<p class="ai-tools"><span>Read-only context:</span> ${tools.map((tool) => `<code>${escapeHtml(tool?.name ?? tool)}</code>`).join(' ')}</p>` : ''}
+      ${tradeoffs.length ? `<ul class="code-list">${tradeoffs.map((item) => `<li class="code-chip">${escapeHtml(item.label)}: ${escapeHtml(item.reason)}</li>`).join('')}</ul>` : ''}
     </aside>`;
 }
 
@@ -65,13 +83,13 @@ function bar(value, domain, tone) {
 
 function planCard(plan, { recommended, currency, optionsById, codes = [] }) {
   const m = plan.metrics;
+  const visibleCodes = codes.filter((code) => !/pareto/i.test(code));
   const touched = Object.entries(plan.selections)
     .map(([bookingId, optionId]) => ({ bookingId, option: optionsById[optionId] }))
     .filter((row) => row.option && (row.option.changes_booking || row.option.optional));
 
   const badges = [
     recommended ? '<span class="badge-rec">Recommended</span>' : '',
-    plan.pareto_optimal ? '<span class="badge-pareto">Pareto-optimal</span>' : '',
     !plan.valid ? '<span class="badge-invalid">Unworkable</span>' : '',
   ].filter(Boolean).join('');
 
@@ -147,9 +165,9 @@ function planCard(plan, { recommended, currency, optionsById, codes = [] }) {
             </li>`).join('')}
         </ul>` : ''}
 
-      ${codes.length ? `
+      ${visibleCodes.length ? `
         <ul class="code-list" aria-label="Reason codes for ${escapeHtml(plan.name)}">
-          ${codes.map((code) => `<li class="code-chip">${escapeHtml(code.replace(/_/g, ' ').toLowerCase())}</li>`).join('')}
+          ${visibleCodes.map((code) => `<li class="code-chip">${escapeHtml(code.replace(/_/g, ' ').toLowerCase())}</li>`).join('')}
         </ul>` : ''}
 
       <p class="plan-score">${escapeHtml(plan.score_breakdown)}</p>
@@ -235,7 +253,7 @@ export function plansMarkup(plans, ranking, currency, optionsById) {
       </div>
     </div>
 
-    <p class="explain">${escapeHtml(ranking.explanation)}</p>
+    <p class="explain">${escapeHtml(memberFacingText(ranking.explanation))}</p>
 
     ${aiExplanationMarkup(ranking.ai)}
 

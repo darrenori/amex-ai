@@ -8,11 +8,12 @@ to the execution engine. This module decides *what happens next*:
     2  reconstruct     rebuild the itinerary from the member's own booking history
     3  assess          propagate the disruption and find what actually broke
     4  create tasks    one per affected booking, with real constraints on it
-    5  delegate        fan out to the specialized agents, concurrently
+    5  delegate        Flight AI, then four downstream AI agents concurrently
     6  assemble        combine agent options into whole candidate plans
-    7  optimize        Pareto front plus a scalarised ranking
-    8  validate        re-check any plan, including one the member edited by hand
-    9  approve         freeze a snapshot and hand it to the execution engine
+    7  optimize        deterministic metrics, eligibility and fallback order
+    8  personalize     Recommendation AI orders eligible plans (API boundary)
+    9  validate        re-check any plan, including one the member edited by hand
+   10  approve         freeze a snapshot and hand it to the execution engine
 
 Step 6 is the one that is easy to get wrong. Asking each agent for its single
 best option and stapling the results together produces a plan nobody chose:
@@ -29,7 +30,7 @@ import uuid
 from datetime import datetime, timedelta
 from typing import Any, Dict, List, Optional, Sequence, Tuple
 
-from . import agents, catalog, connectors, optimizer
+from . import agents, ai_agents, catalog, connectors, optimizer
 from .catalog import JST, SGT
 from .domain import (
     Booking,
@@ -52,7 +53,7 @@ from .graph import Itinerary, affected, propagate, total_exposure
 # to push back, which is when the airline notified.
 NOW = datetime(2026, 9, 18, 6, 2, tzinfo=SGT)
 
-STRATEGIES = ("time", "cost", "disruption", "balanced")
+STRATEGIES = ("personalized", "time", "cost", "disruption", "balanced")
 
 # Consumer surplus on a booked experience, as a multiple of what was paid. A
 # purchase reveals willingness-to-pay at or above the price, never below it, so
@@ -229,6 +230,10 @@ def _downstream_task(
 def _pick(options: List[Option], strategy: str) -> Optional[Option]:
     if not options:
         return None
+    if strategy == "personalized":
+        # Specialist AI order has already been schema/ID validated. When that
+        # call failed this is simply the agent's deterministic fallback order.
+        return options[0]
     if strategy == "cost":
         key = lambda o: (o.cost_delta, -o.quality)
     elif strategy == "time":
@@ -436,14 +441,16 @@ async def plan(
     *,
     priority: str = Priority.INFERRED.value,
     profile_id: str = "time",
+    member_history: Optional[Dict[str, Any]] = None,
+    safety_identifier: str = "demo",
 ) -> Dict[str, Any]:
     """Run the whole planning workflow and return everything the UI needs to
     show its work: the tasks, the agent trace, every option, and the ranked
     candidate plans."""
 
     assessment = assess(itinerary, cancelled)
-    verdicts: Dict[str, Verdict] = assessment["_raw"]
     search_cache: Dict[Tuple[str, str], connectors.SearchResult] = {}
+    history = member_history or catalog.PROFILES_BY_ID.get(profile_id) or {}
 
     root_id = cancelled[0]
     root_task = _root_task(itinerary, root_id, priority)
@@ -451,34 +458,122 @@ async def plan(
         root_task, itinerary, search_cache=search_cache
     )
 
+    flight_run = await ai_agents.assess_specialty(
+        specialty="flights",
+        agent_name="Flight AI Agent",
+        tasks=[root_task.public()],
+        options_by_task={root_task.id: [option.public() for option in root_options]},
+        member_history=history,
+        safety_identifier=safety_identifier,
+    )
+    if flight_run.get("status") == "generated" and flight_run.get("assessments"):
+        flight_order = flight_run["assessments"][0]["ordered_option_ids"]
+        by_id = {option.id: option for option in root_options}
+        root_options = [by_id[option_id] for option_id in flight_order]
+        root_task.option_ids = list(flight_order)
+        root_task.log.append(
+            "AI assessment → "
+            f"{flight_run['assessments'][0]['recommended_option_id']}: "
+            f"{flight_run['assessments'][0]['rationale']}"
+        )
+    elif flight_run.get("status") != "not_requested":
+        root_task.log.append(
+            f"AI fallback → deterministic option order ({flight_run.get('error_code') or 'unavailable'})"
+        )
+
     tasks: List[RecoveryTask] = [root_task]
     catalogue: Dict[str, Option] = {o.id: o for o in root_options}
     plans: List[RecoveryPlan] = []
     seen: set = set()
 
+    # Build every downstream task first, then search their connector inventory
+    # concurrently. This separates fact gathering from the batched model wave.
+    scenarios: List[Dict[str, Any]] = []
+    downstream_tasks: List[RecoveryTask] = []
     for root_option in root_options:
-        # Re-propagate under this specific replacement. Different replacements
-        # break different things — that is the whole reason to do it per-option
-        # rather than once up front.
-        local = propagate(itinerary, replacements={root_id: (root_option.start, root_option.end)})
-        downstream = [bid for bid in affected(local) if bid != root_id]
-
+        local = propagate(
+            itinerary,
+            replacements={root_id: (root_option.start, root_option.end)},
+        )
         wave = [
             _downstream_task(itinerary, bid, local[bid], root_option, priority)
-            for bid in downstream
+            for bid in affected(local)
+            if bid != root_id
         ]
-        results = await asyncio.gather(*(
-            agents.agent_for(itinerary.bookings[t.booking_id].kind).run(
-                t, itinerary, search_cache=search_cache
-            )
-            for t in wave
-        ))
-        tasks.extend(wave)
+        scenarios.append({"root": root_option, "tasks": wave})
+        downstream_tasks.extend(wave)
 
+    downstream_results = await asyncio.gather(*(
+        agents.agent_for(itinerary.bookings[task.booking_id].kind).run(
+            task, itinerary, search_cache=search_cache
+        )
+        for task in downstream_tasks
+    ))
+    tasks.extend(downstream_tasks)
+    options_by_task: Dict[str, List[Option]] = {}
+    for task, option_list in zip(downstream_tasks, downstream_results):
+        options_by_task[task.id] = list(option_list)
+        for option in option_list:
+            catalogue[option.id] = option
+
+    # One batched call per downstream specialty. Affected onward flights keep
+    # their deterministic fallback ordering so the normal path stays at six
+    # total model calls and the replacement-flight agent remains the root wave.
+    specialty_specs = (
+        ("lodging", "Accommodation AI Agent"),
+        ("activities", "Activity AI Agent"),
+        ("dining", "Dining AI Agent"),
+        ("ground", "Ground AI Agent"),
+    )
+
+    async def run_specialty(specialty: str, agent_name: str) -> Dict[str, Any]:
+        selected_tasks = [
+            task for task in downstream_tasks
+            if connectors.connector_for(itinerary.bookings[task.booking_id].kind) == specialty
+        ]
+        return await ai_agents.assess_specialty(
+            specialty=specialty,
+            agent_name=agent_name,
+            tasks=[task.public() for task in selected_tasks],
+            options_by_task={
+                task.id: [option.public() for option in options_by_task.get(task.id, [])]
+                for task in selected_tasks
+            },
+            member_history=history,
+            safety_identifier=safety_identifier,
+        )
+
+    downstream_runs = await asyncio.gather(*(
+        run_specialty(specialty, agent_name)
+        for specialty, agent_name in specialty_specs
+    ))
+    specialist_runs = [flight_run, *downstream_runs]
+
+    task_by_id = {task.id: task for task in tasks}
+    for run in downstream_runs:
+        assessments = run.get("assessments", []) if run.get("status") == "generated" else []
+        for finding in assessments:
+            task_id = finding["task_id"]
+            by_id = {option.id: option for option in options_by_task.get(task_id, [])}
+            options_by_task[task_id] = [
+                by_id[option_id] for option_id in finding["ordered_option_ids"]
+            ]
+            task = task_by_id[task_id]
+            task.option_ids = list(finding["ordered_option_ids"])
+            task.log.append(
+                f"AI assessment → {finding['recommended_option_id']}: {finding['rationale']}"
+            )
+        if run.get("status") in {"failed", "disabled"}:
+            for task_id in run.get("task_ids", []):
+                task_by_id[task_id].log.append(
+                    f"AI fallback → deterministic option order ({run.get('error_code') or 'unavailable'})"
+                )
+
+    for scenario in scenarios:
+        root_option: Option = scenario["root"]
         by_booking: Dict[str, List[Option]] = {}
-        for option_list in results:
-            for option in option_list:
-                catalogue[option.id] = option
+        for task in scenario["tasks"]:
+            for option in options_by_task.get(task.id, []):
                 by_booking.setdefault(option.booking_id, []).append(option)
 
         for strategy in STRATEGIES:
@@ -518,6 +613,8 @@ async def plan(
         "options": [o.public() for o in catalogue.values()],
         "plans": [p.public() for p in plans],
         "ranking": ranking,
+        "agent_runs": specialist_runs,
+        "specialist_findings": specialist_runs,
         "priority": priority,
         "profile_id": profile_id,
         # Consumed by the API/session layer and removed before serialization.
@@ -531,6 +628,7 @@ async def plan(
 
 
 _STRATEGY_LABEL = {
+    "personalized": "member fit",
     "time": "fastest",
     "cost": "cheapest",
     "disruption": "least disruption",

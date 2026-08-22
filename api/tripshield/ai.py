@@ -1,8 +1,9 @@
-"""Fail-closed AI explanations over TripShield's deterministic ranking.
+"""Fail-closed structured model calls for TripShield's bounded AI agents.
 
-Models can read an immutable planning snapshot through MCP and return prose.
-They never receive an interface capable of changing plan scores, ordering,
-validity, reason codes, approval, or execution.
+Models read immutable, role-scoped planning snapshots through MCP and return
+strict structured assessments or a personalized order. They never receive an
+interface capable of changing supplier facts, plan scores, validity, reason
+codes, approval, or execution. The optimizer validates any returned order.
 """
 
 from __future__ import annotations
@@ -13,7 +14,7 @@ import json
 import os
 import time
 from contextlib import asynccontextmanager
-from typing import Any, Dict, List, Mapping, Optional, Sequence, Tuple
+from typing import Any, Callable, Dict, List, Mapping, Optional, Sequence, Tuple
 
 from .mcp_server import MCPClient, TOOL_NAMES, create_mcp_server, mcp_sdk_available
 
@@ -156,6 +157,10 @@ def ai_status(env: Optional[Mapping[str, str]] = None) -> Dict[str, Any]:
         error_code = "provider_sdk_unavailable"
     return {
         "status": "available" if not error_code else "unavailable",
+        "workflow": "bounded_multi_agent",
+        "agent_roles": [
+            "flight", "accommodation", "activity", "dining", "ground", "recommendation"
+        ],
         "provider": provider,
         "model": selected.get("model"),
         "credential_present": selected.get("credential_present", False),
@@ -204,7 +209,10 @@ async def _mcp_context(bound: Any, client_factory: Optional[Any]):
         yield connected
 
 
-async def _discover_tools(client: Any) -> List[Dict[str, Any]]:
+async def _discover_tools(
+    client: Any,
+    expected_names: Sequence[str] = TOOL_NAMES,
+) -> List[Dict[str, Any]]:
     result = await _maybe_await(client.list_tools())
     raw_tools = _value(result, "tools", [])
     tools: List[Dict[str, Any]] = []
@@ -216,7 +224,7 @@ async def _discover_tools(client: Any) -> List[Dict[str, Any]]:
                 raw, "input_schema", _value(raw, "inputSchema", {"type": "object"})
             ),
         })
-    if tuple(tool["name"] for tool in tools) != TOOL_NAMES:
+    if tuple(tool["name"] for tool in tools) != tuple(expected_names):
         raise _AIFlowError("invalid_mcp_tools")
     return tools
 
@@ -240,8 +248,12 @@ async def _call_mcp_tool(client: Any, name: str, arguments: Any) -> Any:
     raise _AIFlowError("empty_mcp_result")
 
 
-def _record_tool(name: str, used: List[str]) -> None:
-    if name not in TOOL_NAMES:
+def _record_tool(
+    name: str,
+    used: List[str],
+    expected_names: Sequence[str] = TOOL_NAMES,
+) -> None:
+    if name not in expected_names:
         raise _AIFlowError("unknown_tool")
     if name in used:
         raise _AIFlowError("repeated_tool")
@@ -321,19 +333,22 @@ async def _run_openai(
     *,
     model: str,
     safety_identifier: str,
+    expected_tool_names: Sequence[str] = TOOL_NAMES,
+    output_schema: Mapping[str, Any] = AI_OUTPUT_SCHEMA,
+    schema_name: str = "tripshield_ai_insight",
+    instructions: str = _SYSTEM_PROMPT,
+    user_prompt: str = "Inspect the MCP planning snapshot and explain the deterministic recommendation.",
 ) -> Tuple[Dict[str, Any], List[str]]:
     used: List[str] = []
     previous_response_id: Optional[str] = None
-    next_input: Any = (
-        "Inspect the MCP planning snapshot and explain the deterministic recommendation."
-    )
+    next_input: Any = user_prompt
     api_tools = _openai_tools(tools)
 
     for _round in range(MAX_MODEL_ROUNDS):
-        missing = [name for name in TOOL_NAMES if name not in used]
+        missing = [name for name in expected_tool_names if name not in used]
         kwargs: Dict[str, Any] = {
             "model": model,
-            "instructions": _SYSTEM_PROMPT,
+            "instructions": instructions,
             "input": next_input,
             "tools": api_tools,
             "tool_choice": "required" if missing else "none",
@@ -346,9 +361,9 @@ async def _run_openai(
             kwargs["text"] = {
                 "format": {
                     "type": "json_schema",
-                    "name": "tripshield_ai_insight",
+                    "name": schema_name,
                     "strict": True,
-                    "schema": AI_OUTPUT_SCHEMA,
+                    "schema": dict(output_schema),
                 }
             }
         response = await _maybe_await(client.responses.create(**kwargs))
@@ -361,7 +376,7 @@ async def _run_openai(
             outputs = []
             for call in calls:
                 name = _value(call, "name")
-                _record_tool(name, used)
+                _record_tool(name, used, expected_tool_names)
                 arguments = _json_object(_value(call, "arguments", "{}"))
                 result = await _call_mcp_tool(mcp_client, name, arguments)
                 outputs.append({
@@ -395,19 +410,23 @@ async def _run_anthropic(
     *,
     model: str,
     safety_identifier: str,
+    expected_tool_names: Sequence[str] = TOOL_NAMES,
+    output_schema: Mapping[str, Any] = AI_OUTPUT_SCHEMA,
+    instructions: str = _SYSTEM_PROMPT,
+    user_prompt: str = "Inspect the MCP snapshot and explain the deterministic recommendation.",
 ) -> Tuple[Dict[str, Any], List[str]]:
     used: List[str] = []
     messages: List[Dict[str, Any]] = [{
         "role": "user",
-        "content": "Inspect the MCP snapshot and explain the deterministic recommendation.",
+        "content": user_prompt,
     }]
 
     for _round in range(MAX_MODEL_ROUNDS):
-        missing = [name for name in TOOL_NAMES if name not in used]
+        missing = [name for name in expected_tool_names if name not in used]
         kwargs: Dict[str, Any] = {
             "model": model,
             "max_tokens": 1800,
-            "system": _SYSTEM_PROMPT,
+            "system": instructions,
             "messages": messages,
             "tools": _anthropic_tools(tools),
             "tool_choice": {"type": "any"} if missing else {"type": "none"},
@@ -415,7 +434,7 @@ async def _run_anthropic(
         }
         if not missing:
             kwargs["output_config"] = {
-                "format": {"type": "json_schema", "schema": AI_OUTPUT_SCHEMA}
+                "format": {"type": "json_schema", "schema": dict(output_schema)}
             }
         response = await _maybe_await(client.messages.create(**kwargs))
         content = _value(response, "content", []) or []
@@ -425,7 +444,7 @@ async def _run_anthropic(
             results = []
             for call in calls:
                 name = _value(call, "name")
-                _record_tool(name, used)
+                _record_tool(name, used, expected_tool_names)
                 arguments = _value(call, "input", {})
                 result = await _call_mcp_tool(mcp_client, name, arguments)
                 results.append({
@@ -469,6 +488,116 @@ def _exception_code(exc: BaseException) -> str:
     if "ratelimit" in name or "rate_limit" in name:
         return "rate_limit"
     return "provider_error"
+
+
+async def run_structured_agent(
+    *,
+    role: str,
+    bound_mcp: Any,
+    output_schema: Mapping[str, Any],
+    schema_name: str,
+    instructions: str,
+    user_prompt: str,
+    safety_identifier: str = "demo",
+    output_validator: Optional[Callable[[Dict[str, Any]], Dict[str, Any]]] = None,
+    provider_client: Optional[Any] = None,
+    mcp_client_factory: Optional[Any] = None,
+    env: Optional[Mapping[str, str]] = None,
+    timeout_seconds: Optional[float] = None,
+) -> Dict[str, Any]:
+    """Run one role-scoped model agent and return sanitized provenance.
+
+    The caller prepares an immutable MCP snapshot and supplies the semantic
+    validator. Provider failures never escape this boundary; cancellation still
+    belongs to the request owner and is re-raised.
+    """
+
+    started = time.monotonic()
+    selected = _selection(env)
+    result: Dict[str, Any] = {
+        "role": role,
+        "status": "failed",
+        "provider": selected.get("provider"),
+        "model": selected.get("model"),
+        "transport": "in_process",
+        "tools_used": [],
+        "output": None,
+        "latency_ms": 0,
+        "error_code": None,
+    }
+    if selected.get("error_code"):
+        result.update(status="disabled", error_code=selected["error_code"])
+        result["latency_ms"] = round((time.monotonic() - started) * 1000)
+        return result
+
+    expected_names = tuple(getattr(bound_mcp, "tool_names", ()))
+    if not expected_names:
+        result.update(status="failed", error_code="invalid_mcp_tools")
+        return result
+
+    try:
+        deadline = (
+            float(timeout_seconds)
+            if timeout_seconds is not None
+            else float(_env(env).get("AI_TIMEOUT_SECONDS", DEFAULT_TIMEOUT_SECONDS))
+        )
+        if deadline <= 0:
+            deadline = DEFAULT_TIMEOUT_SECONDS
+    except (TypeError, ValueError):
+        deadline = DEFAULT_TIMEOUT_SECONDS
+
+    provider = str(selected["provider"])
+    model = str(selected["model"])
+
+    async def run() -> Tuple[Dict[str, Any], List[str]]:
+        client = provider_client or _provider_client(provider, selected["api_key"], deadline)
+        async with _mcp_context(bound_mcp, mcp_client_factory) as mcp_client:
+            tools = await _discover_tools(mcp_client, expected_names)
+            if provider == "anthropic":
+                return await _run_anthropic(
+                    client,
+                    mcp_client,
+                    tools,
+                    model=model,
+                    safety_identifier=safety_identifier,
+                    expected_tool_names=expected_names,
+                    output_schema=output_schema,
+                    instructions=instructions,
+                    user_prompt=user_prompt,
+                )
+            return await _run_openai(
+                client,
+                mcp_client,
+                tools,
+                model=model,
+                safety_identifier=safety_identifier,
+                expected_tool_names=expected_names,
+                output_schema=output_schema,
+                schema_name=schema_name,
+                instructions=instructions,
+                user_prompt=user_prompt,
+            )
+
+    try:
+        raw, used = await asyncio.wait_for(run(), timeout=deadline)
+        try:
+            validated = output_validator(raw) if output_validator else raw
+        except (KeyError, TypeError, ValueError) as exc:
+            raise _AIFlowError("invalid_model_output") from exc
+        if not isinstance(validated, Mapping):
+            raise _AIFlowError("invalid_model_output")
+        result.update(
+            status="generated",
+            tools_used=used,
+            output=dict(validated),
+            error_code=None,
+        )
+    except BaseException as exc:
+        if isinstance(exc, asyncio.CancelledError):
+            raise
+        result.update(status="failed", error_code=_exception_code(exc), tools_used=[])
+    result["latency_ms"] = round((time.monotonic() - started) * 1000)
+    return result
 
 
 async def generate_ai_insight(

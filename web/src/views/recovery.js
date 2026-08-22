@@ -107,6 +107,29 @@ export function renderRecovery(container, { profiles, currency, onBack, announce
       </div>`;
   }
 
+  let planningTimer = null;
+
+  function busyPlanning() {
+    const messages = [
+      'Flight AI is checking validated replacement inventory…',
+      'Recalculating which downstream bookings are affected…',
+      'Hotel, activity, dining and ground specialists are working in parallel…',
+      'Validating whole-trip options and personalizing the recommendation…',
+    ];
+    let index = 0;
+    busy(messages[index]);
+    planningTimer = window.setInterval(() => {
+      index = Math.min(index + 1, messages.length - 1);
+      const copy = body.querySelector('.stage-loading p');
+      if (copy) copy.textContent = messages[index];
+    }, 1400);
+  }
+
+  function stopPlanningProgress() {
+    if (planningTimer !== null) window.clearInterval(planningTimer);
+    planningTimer = null;
+  }
+
   function failure(error) {
     body.innerHTML = `
       <div class="alert" role="alert">
@@ -184,13 +207,15 @@ export function renderRecovery(container, { profiles, currency, onBack, announce
   // -- stage 3 -----------------------------------------------------------
 
   async function loadPlanning() {
-    busy('Creating recovery tasks, searching connector adapters and comparing whole-trip plans…');
+    busyPlanning();
     try {
       state.planning = await api.plan(state.priority, state.profileId);
       state.ranking = state.planning.ranking;
+      stopPlanningProgress();
       paint();
       announce(state.ranking.explanation);
     } catch (error) {
+      stopPlanningProgress();
       failure(error);
     }
   }
@@ -198,7 +223,11 @@ export function renderRecovery(container, { profiles, currency, onBack, announce
   async function reRank() {
     try {
       const result = await api.rank(state.priority, state.profileId);
-      state.planning = { ...state.planning, plans: result.plans };
+      state.planning = {
+        ...state.planning,
+        plans: result.plans,
+        agent_runs: result.agent_runs ?? state.planning.agent_runs,
+      };
       state.ranking = result.ranking;
       paint();
       announce(state.ranking.explanation);
@@ -228,7 +257,7 @@ export function renderRecovery(container, { profiles, currency, onBack, announce
       </div>
 
       <div class="card">
-        <p class="inspect-divider">How the ranking was reached</p>
+        <p class="inspect-divider">How the recommendation was built</p>
         ${weightingMarkup(state.ranking, profiles, state.profileId, state.priority)}
         ${state.priority === 'inferred' ? historyMarkup(profile) : ''}
       </div>
