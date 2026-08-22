@@ -15,6 +15,7 @@
 import { api } from '../api.js';
 import { duration, escapeHtml, money, signedMoney, stamp, stampZoned } from '../format.js';
 import { icons, kindIcon } from '../icons.js';
+import { optionServiceLinkMarkup } from './partners.js';
 
 function optionChip(option, { chosen, currency, draggable = true }) {
   const kind = option.drops_booking ? 'critical' : option.optional ? 'accent' : 'neutral';
@@ -24,7 +25,7 @@ function optionChip(option, { chosen, currency, draggable = true }) {
       <span class="opt-grip" aria-hidden="true">${icons.grip}</span>
       <span class="icon-badge ${kind}" aria-hidden="true">${kindIcon[option.kind] ?? icons.plane}</span>
       <span class="opt-main">
-        <span class="opt-title">${escapeHtml(option.title)}</span>
+        <span class="opt-title">${optionServiceLinkMarkup(option)}</span>
         <span class="opt-meta">
           ${escapeHtml(option.supplier)} ·
           <span class="${option.cost_delta <= 0 ? 'pos' : 'neg'}">${escapeHtml(signedMoney(option.cost_delta, currency))}</span>
@@ -108,7 +109,7 @@ export function renderEditor(container, {
               <div class="lane-chosen">
                 <span class="icon-badge ${chosen.drops_booking ? 'critical' : 'accent'}" aria-hidden="true">${kindIcon[chosen.kind] ?? icons.plane}</span>
                 <span class="opt-main">
-                  <span class="opt-title">${escapeHtml(chosen.title)}</span>
+                  <span class="opt-title">${optionServiceLinkMarkup(chosen)}</span>
                   <span class="opt-meta">${escapeHtml(chosen.detail)}</span>
                   <span class="opt-tool mono">${escapeHtml(chosen.tool_call)}</span>
                 </span>

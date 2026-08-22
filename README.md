@@ -4,6 +4,11 @@ A **Travel Recovery Orchestrator** for American Express Card Members. An indepen
 concept prepared for the **AMEX AI Hackathon 2026** — not an official American Express
 product, and not affiliated with or endorsed by American Express.
 
+The member UI presents the three highest-ranked complete recovery plans. Replacement
+flight, hotel, dining and ground-service titles link to the relevant approved American
+Express service in a new tab. Activity titles remain plain text when no appropriate
+approved destination is available; arbitrary supplier URLs are never rendered.
+
 ## The idea
 
 When a flight is cancelled, most tools re-price the flight. But the hotel, the airport
@@ -356,8 +361,24 @@ The default suite is offline and uses mocked upstream/model responses:
 
 ```bash
 .venv/bin/python -m pytest
+npm run test:web
 npm run build
 ```
+
+The browser-facing integration tests verify that only the three highest-ranked complete
+plans are rendered, external replacement links open safely, arbitrary supplier URLs are
+rejected, and activities without an appropriate approved destination remain plain text.
+
+| Integration | Default automated coverage | Optional live coverage |
+| --- | --- | --- |
+| AeroDataBox | Injected response normalization, cancellation detection, sanitized fallback and health response | Read-only production status smoke test |
+| Duffel | Test-offer request/response contract, SGD filtering, caching, fallback completeness and simulated execution | Read-only test-mode offer search |
+| LiteAPI | Sandbox request/response contract, SGD filtering, Amex partner matching and fallback completeness | Read-only sandbox rate search |
+| Activities, dining and ground | Complete synthetic inventories, provenance, ownership and health responses | None; no approved live adapter is configured |
+| OpenAI and Anthropic | Provider selection, role-scoped MCP discovery, tool calls, strict output validation and fail-closed fallback | None; model calls are never required for the default suite |
+| TripShield MCP | Immutable snapshots, role tool allowlists and in-process MCP v2 calls | Not applicable |
+| API and execution | Detection → planning → validation → approval → gated execution → rollback/audit | Not applicable; transactions remain simulated |
+| Member UI | Three-plan limit, approved new-tab destinations, unsafe-link rejection and production build | Browser walkthrough against the local API |
 
 Credentialed read-path smoke tests are opt-in and never book anything:
 

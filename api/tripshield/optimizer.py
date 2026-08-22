@@ -278,7 +278,7 @@ def _notification(plan: Optional[RecoveryPlan]) -> str:
     return (
         f"Your SIN→NRT flight was cancelled. We recommend {plan.name} — {clause}, "
         f"touching {m.bookings_changed} booking{'' if m.bookings_changed == 1 else 's'}. "
-        "Every alternative is one tap away."
+        "The three strongest recovery options are ready to compare."
     )
 
 

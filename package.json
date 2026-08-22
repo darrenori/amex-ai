@@ -8,7 +8,9 @@
     "dev": "vite",
     "dev:api": "uvicorn api.index:app --reload --port 8000",
     "build": "vite build",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "test:web": "node --test web/tests/*.test.js",
+    "verify:web": "npm run test:web && npm run build"
   },
   "devDependencies": {
     "vite": "^7.1.5"

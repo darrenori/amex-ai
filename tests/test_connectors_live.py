@@ -62,6 +62,28 @@ def test_fixture_inventory_is_explicitly_labelled_synthetic(monkeypatch):
     assert all(item.synthetic is True and item.source_mode == "fixture" for item in result.items)
 
 
+@pytest.mark.parametrize(("connector", "booking_id", "expected_count"), [
+    ("flights", "bk_flight_out", 4),
+    ("lodging", "bk_hotel_tokyo", 4),
+    ("activities", "bk_activity_tdl", 4),
+    ("dining", "bk_dining_tokyo", 4),
+    ("ground", "bk_transfer_nex", 5),
+])
+def test_every_inventory_adapter_has_a_complete_safe_fallback(
+    monkeypatch, connector, booking_id, expected_count
+):
+    monkeypatch.delenv("DUFFEL_ACCESS_TOKEN", raising=False)
+    monkeypatch.delenv("LITEAPI_SANDBOX_KEY", raising=False)
+
+    result = asyncio.run(connectors.search_live_or_fixture(connector, booking_id))
+
+    assert result.mode == "fixture"
+    assert len(result.items) == expected_count
+    assert all(item.synthetic is True for item in result.items)
+    assert all(item.source_mode == "fixture" for item in result.items)
+    assert all(connectors.connector_for(item.kind) == connector for item in result.items)
+
+
 def test_amex_matching_is_exact_or_explicit_alias_only():
     match = match_partner("Hilton Tokyo Bay Hotel", category="lodging", market="JP")
     assert match and match["name"] == "Hilton Tokyo Bay"
@@ -186,6 +208,27 @@ def test_connector_health_returns_sanitized_bounded_shape(monkeypatch):
     assert health["checks"][0]["key"] == "flights"
     assert health["checks"][0]["error_category"] == "missing_credential"
     assert health["checks"][0]["candidate_count"] == 4
+
+
+@pytest.mark.parametrize("connector", tuple(connectors.SPECS))
+def test_every_connector_health_entry_is_sanitized(monkeypatch, connector):
+    for key in ("AERODATABOX_API_KEY", "DUFFEL_ACCESS_TOKEN", "LITEAPI_SANDBOX_KEY"):
+        monkeypatch.delenv(key, raising=False)
+
+    health = asyncio.run(connectors.connector_health(connector))
+
+    assert set(health) == {"checked_at", "checks"}
+    assert len(health["checks"]) == 1
+    check = health["checks"][0]
+    assert set(check) == {
+        "key", "mode", "success", "latency_ms", "candidate_count", "error_category"
+    }
+    assert check["key"] == connector
+    assert check["mode"] == "fixture"
+    assert isinstance(check["success"], bool)
+    assert isinstance(check["latency_ms"], int)
+    assert isinstance(check["candidate_count"], int)
+    assert check["error_category"] is None or isinstance(check["error_category"], str)
 
 
 @pytest.mark.live

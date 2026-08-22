@@ -362,6 +362,7 @@
 .plan-top { display: flex; gap: var(--space-3); align-items: flex-start; }
 .plan-heading { font-size: var(--text-section); font-weight: 600; line-height: 1.2; }
 .plan-summary { margin-top: var(--space-2); font-size: var(--text-sm); color: var(--ink-muted); }
+.results-count { margin: var(--space-4) 0 var(--space-3); font-size: var(--text-sm); color: var(--ink-muted); }
 
 .obj-grid { display: grid; grid-template-columns: 1fr 1fr; gap: var(--space-3) var(--space-4); }
 .obj-grid dt { font-size: var(--text-xs); color: var(--ink-muted); }
@@ -389,6 +390,20 @@
 .touch-main { min-width: 0; }
 .touch-title { display: block; font-size: var(--text-sm); }
 .touch-meta { display: block; margin-top: 2px; font-size: var(--text-xs); color: var(--ink-muted); font-variant-numeric: tabular-nums; }
+
+.option-service-link {
+  display: inline-flex;
+  align-items: baseline;
+  gap: var(--space-1);
+  color: inherit;
+  font-weight: inherit;
+  text-decoration: underline;
+  text-decoration-color: color-mix(in srgb, currentColor 40%, transparent);
+  text-underline-offset: 3px;
+}
+
+.option-service-link:hover { color: var(--primary); text-decoration-color: currentColor; }
+.option-service-link:focus-visible { border-radius: 2px; outline: 2px solid var(--primary); outline-offset: 3px; }
 
 .amex-partner-badge {
   display: inline-flex;

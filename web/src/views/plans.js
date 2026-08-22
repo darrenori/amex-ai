@@ -9,7 +9,7 @@
 //
 import { duration, escapeHtml, money, signedMoney, stampZoned } from '../format.js';
 import { icons, kindIcon } from '../icons.js';
-import { collectLinks, partnerLinksMarkup } from './partners.js';
+import { collectLinks, optionServiceLinkMarkup, partnerLinksMarkup } from './partners.js';
 
 const OBJECTIVE_DOMAIN = { cost: 700, hours: 48, changed: 7, risk: 0.5 };
 
@@ -40,7 +40,7 @@ function amexPartnerLinks(options) {
   return [...seen.values()];
 }
 
-function aiExplanationMarkup(ai) {
+function aiExplanationMarkup(ai, visiblePlanIds = []) {
   if (!ai) return '';
   if (ai.status !== 'generated') {
     return `
@@ -59,7 +59,9 @@ function aiExplanationMarkup(ai) {
   const confidence = Number.isFinite(Number(ai.confidence))
     ? `${Math.round(Number(ai.confidence) * 100)}% confidence`
     : '';
-  const tradeoffs = Array.isArray(ai.tradeoffs) ? ai.tradeoffs : [];
+  const tradeoffs = Array.isArray(ai.tradeoffs)
+    ? ai.tradeoffs.filter((item) => !visiblePlanIds.length || visiblePlanIds.includes(item.plan_id))
+    : [];
 
   return `
     <aside class="ai-explanation" aria-label="AI personalized recommendation">
@@ -147,7 +149,7 @@ function planCard(plan, { recommended, currency, optionsById, codes = [] }) {
           <li>
             <span class="icon-badge ${option.drops_booking ? 'critical' : 'neutral'}" aria-hidden="true">${kindIcon[option.kind] ?? icons.plane}</span>
             <span class="touch-main">
-              <span class="touch-title">${escapeHtml(option.title)}</span>
+              <span class="touch-title">${optionServiceLinkMarkup(option)}</span>
               <span class="touch-meta">
                 ${escapeHtml(option.supplier)} · ${escapeHtml(signedMoney(option.cost_delta, currency))}
                 ${amexPartnerBadge(option.amex_partner)}
@@ -242,7 +244,8 @@ export function historyMarkup(profile) {
 
 export function plansMarkup(plans, ranking, currency, optionsById) {
   const byId = Object.fromEntries(plans.map((p) => [p.id, p]));
-  const ordered = ranking.order.map((id) => byId[id]).filter(Boolean);
+  const ordered = ranking.order.map((id) => byId[id]).filter(Boolean).slice(0, 3);
+  const visiblePlanIds = ordered.map((plan) => plan.id);
 
   return `
     <div class="notif">
@@ -255,7 +258,9 @@ export function plansMarkup(plans, ranking, currency, optionsById) {
 
     <p class="explain">${escapeHtml(memberFacingText(ranking.explanation))}</p>
 
-    ${aiExplanationMarkup(ranking.ai)}
+    ${aiExplanationMarkup(ranking.ai, visiblePlanIds)}
+
+    <p class="results-count">Showing the three strongest complete recovery plans.</p>
 
     <div class="plan-grid">
       ${ordered.map((plan) => planCard(plan, {
