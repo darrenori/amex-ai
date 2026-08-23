@@ -212,20 +212,26 @@ exact name or explicit-alias match against the curated catalog in
 `api/tripshield/amex_partners.py`. The catalog is maintained from official Amex pages,
 stores its verification date, and is never refreshed by runtime scraping.
 
-Configure any subset of these environment variables; the app remains fully usable
-without them:
+Configure any subset of the names listed in `.env.example`; the app remains fully usable
+without them. Real values belong only in an ignored local `.env*` file, the shell process
+environment, or the hosting provider's encrypted environment settings:
 
 ```bash
-AERODATABOX_API_KEY=your_rapidapi_key
-DUFFEL_ACCESS_TOKEN=duffel_test_token
-LITEAPI_SANDBOX_KEY=liteapi_sandbox_key
-ANTHROPIC_API_KEY=anthropic_key
-OPENAI_API_KEY=openai_key
-AI_PROVIDER=anthropic              # or openai; optional
-ANTHROPIC_MODEL=claude-sonnet-5    # optional
-OPENAI_MODEL=gpt-5.6-sol           # optional
-AI_TIMEOUT_SECONDS=8               # optional
+AERODATABOX_API_KEY=<set-in-environment>
+DUFFEL_ACCESS_TOKEN=<set-in-environment>
+LITEAPI_SANDBOX_KEY=<set-in-environment>
+LITEAPI_HOTEL_IDS=<set-in-environment>
+ANTHROPIC_API_KEY=<set-in-environment>
+OPENAI_API_KEY=<set-in-environment>
+AI_PROVIDER=anthropic                   # or openai; optional
+ANTHROPIC_MODEL=claude-sonnet-5         # optional
+OPENAI_MODEL=gpt-5.6-sol                # optional
+AI_TIMEOUT_SECONDS=8                    # optional
 ```
+
+For local development, copy `.env.example` to the ignored `.env.local`, add values there,
+and start the backend with `npm run dev:api:env`. Vercel values belong in the project's
+encrypted Environment Variables settings instead of any committed file.
 
 When `AI_PROVIDER` is unset, Anthropic is preferred when configured, then OpenAI. An
 explicitly selected provider never silently fails over to the other provider. Model
@@ -364,6 +370,11 @@ The default suite is offline and uses mocked upstream/model responses:
 npm run test:web
 npm run build
 ```
+
+GitHub Actions runs the backend suite on Python 3.12 and the Vercel-compatible Python
+3.14 runtime, runs the frontend suite/build on Node 22, checks dependency consistency,
+and rejects tracked `.env*` files or credential-shaped values. CI requires no secrets;
+credentialed upstream smoke tests remain explicitly opt-in and read-only.
 
 The browser-facing integration tests verify that only the three highest-ranked complete
 plans are rendered, external replacement links open safely, arbitrary supplier URLs are

@@ -7,6 +7,7 @@
   "scripts": {
     "dev": "vite",
     "dev:api": "uvicorn api.index:app --reload --port 8000",
+    "dev:api:env": "uvicorn api.index:app --reload --port 8000 --env-file .env.local",
     "build": "vite build",
     "preview": "vite preview",
     "test:web": "node --test web/tests/*.test.js",
