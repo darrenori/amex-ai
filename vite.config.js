@@ -1,4 +1,5 @@
 import { defineConfig } from 'vite';
+import react from '@vitejs/plugin-react';
 
 // The frontend lives in web/ and builds to dist/, which is what Vercel serves.
 // In development /api is proxied to the FastAPI app (npm run dev:api).
@@ -10,6 +11,11 @@ const API_PORT = process.env.API_PORT || '8000';
 export default defineConfig({
   root: 'web',
   publicDir: '../public',
+  plugins: [react()],
+  resolve: {
+    // One React copy across the vanilla shell and the mounted islands.
+    dedupe: ['react', 'react-dom'],
+  },
   build: {
     outDir: '../dist',
     emptyOutDir: true,

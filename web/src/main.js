@@ -2,20 +2,26 @@
 // the calm account overview, and the recovery console that takes over when a
 // trip breaks.
 
+import './styles/fonts.css';
 import './styles/tokens.css';
 import './styles/base.css';
 import './styles/app.css';
 import './styles/console.css';
+import './styles/islands.css';
+import './styles/home.css';
 
 import { api } from './api.js';
 import { escapeHtml } from './format.js';
 import { closeModal } from './components/modal.js';
 import { renderAccount } from './views/account.js';
 import { renderRecovery } from './views/recovery.js';
+import { initHome } from './views/home.js';
+import { unmountAll } from './islands/mount.js';
 
 const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)');
 
 const dom = {
+  homeView: document.getElementById('view-home'),
   loginView: document.getElementById('view-login'),
   appView: document.getElementById('view-app'),
   form: document.getElementById('loginForm'),
@@ -64,6 +70,27 @@ function showBanner(container, message) {
       </div>
     </div>`;
 }
+
+// ---------------------------------------------------------------------------
+// Home → Login
+// ---------------------------------------------------------------------------
+
+function showLogin() {
+  dom.homeView.classList.remove('is-active');
+  dom.loginView.classList.add('is-active');
+  window.scrollTo({ top: 0, behavior: 'auto' });
+  window.setTimeout(() => dom.email.focus(), reducedMotion.matches ? 20 : 240);
+}
+
+function showHome() {
+  dom.appView.classList.remove('is-active');
+  dom.appView.setAttribute('aria-hidden', 'true');
+  dom.loginView.classList.remove('is-active');
+  dom.homeView.classList.add('is-active');
+  window.scrollTo({ top: 0, behavior: 'auto' });
+}
+
+initHome(dom.homeView, { onEnter: showLogin, reducedMotion: reducedMotion.matches });
 
 // ---------------------------------------------------------------------------
 // Login
@@ -127,7 +154,7 @@ function setLoading(loading) {
   dom.loginButton.disabled = loading;
   dom.loginButton.classList.toggle('is-loading', loading);
   dom.spinner.hidden = !loading;
-  dom.loginButtonText.textContent = loading ? 'Preparing your journey…' : 'Log in';
+  dom.loginButtonText.textContent = loading ? 'Signing in…' : 'Log in';
 }
 
 dom.form.addEventListener('submit', async (event) => {
@@ -147,8 +174,7 @@ dom.form.addEventListener('submit', async (event) => {
     session.account = account;
     session.profiles = profiles.profiles;
 
-    // A short, composed pause — the brand does not rush a sign-in.
-    await new Promise((resolve) => window.setTimeout(resolve, reducedMotion.matches ? 120 : 700));
+    await new Promise((resolve) => window.setTimeout(resolve, reducedMotion.matches ? 80 : 300));
     enterApp();
   } catch (error) {
     showFieldError(dom.password, dom.passwordError, error.message);
@@ -217,9 +243,7 @@ dom.restartButton.addEventListener('click', () => {
   // nothing detected rather than inheriting this one's disruption and run.
   api.reset().catch(() => {});
   closeModal(false);
-  dom.appView.classList.remove('is-active');
-  dom.appView.setAttribute('aria-hidden', 'true');
-  dom.loginView.classList.add('is-active');
+  unmountAll();
   dom.memberChip.hidden = true;
   dom.accountView.innerHTML = '';
   dom.recoveryView.innerHTML = '';
@@ -230,8 +254,7 @@ dom.restartButton.addEventListener('click', () => {
   showFieldError(dom.email, dom.emailError, '');
   showFieldError(dom.password, dom.passwordError, '');
   dom.formStatus.textContent = '';
-  window.scrollTo({ top: 0, behavior: 'auto' });
-  window.setTimeout(() => dom.email.focus(), reducedMotion.matches ? 20 : 240);
+  showHome();
 });
 
 document.getElementById('homeLink').addEventListener('click', (event) => {

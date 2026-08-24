@@ -5,6 +5,17 @@
 import { escapeHtml, money, points } from '../format.js';
 import { icons } from '../icons.js';
 import { openModal } from '../components/modal.js';
+import { mountIsland } from '../islands/mount.js';
+import AreaTrendChart from '../islands/AreaTrendChart.jsx';
+
+// A six-month Membership Rewards trend ending at the live balance. Synthetic,
+// deterministic, and clearly labelled — it exists to give the overview a real
+// chart rather than a decorative one.
+function rewardsTrend(balance) {
+  const months = ['Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug'];
+  const steps = [0.87, 0.9, 0.93, 0.96, 0.98, 1];
+  return months.map((label, i) => ({ label, value: Math.round(balance * steps[i]) }));
+}
 
 function componentBlock(booking, currency) {
   return `
@@ -57,7 +68,7 @@ export function renderAccount(container, { data, onCheckFlights, announce }) {
     <div class="page-head">
       <p class="eyebrow">Good evening</p>
       <h2>Welcome back, ${escapeHtml(member.first_name)}.</h2>
-      <p>Your travel, rewards and recent account activity are all in order.</p>
+      <p>Your travel and rewards, at a glance.</p>
     </div>
 
     <div class="account-grid">
@@ -89,6 +100,17 @@ export function renderAccount(container, { data, onCheckFlights, announce }) {
         </div>
       </div>
     </div>
+
+    <section class="card" aria-labelledby="trendHeading">
+      <div class="card-head">
+        <div>
+          <p class="eyebrow" id="trendHeading">Membership Rewards®</p>
+          <h3 style="margin-top:8px;font-size:var(--text-section)">Points, last 6 months</h3>
+        </div>
+        <span class="chip chip-accent"><span class="dot"></span>Growing</span>
+      </div>
+      <div id="rewardsChart" style="margin-top:16px"></div>
+    </section>
 
     <section class="card" aria-labelledby="tripHeading">
       <div class="card-head">
@@ -142,13 +164,11 @@ export function renderAccount(container, { data, onCheckFlights, announce }) {
           <span class="icon-badge" aria-hidden="true">${icons.shield}</span>
         </div>
         <p class="muted" style="margin-top:12px;font-size:var(--text-sm)">
-          All ${trip.bookings.length} bookings on this trip — flights, both hotels, the airport transfer, the
-          park passport and the dinner reservation — went on ${escapeHtml(member.card_label)}.
-          That single fact is what lets TripShield reconstruct the dependencies between them and price
-          a disruption against the whole journey instead of one booking.
+          All ${trip.bookings.length} bookings are on ${escapeHtml(member.card_label)} — that's what lets
+          TripShield map the dependencies and price a disruption against the whole journey, not one booking.
         </p>
         <div class="disruption-cta" style="margin-top:24px">
-          <p class="subdued">Sweep this trip for disruption.</p>
+          <p class="subdued">Check this trip for disruption.</p>
           <button class="btn btn-primary" id="checkFlightsButton" type="button">Check my flights</button>
         </div>
       </section>
@@ -196,4 +216,9 @@ export function renderAccount(container, { data, onCheckFlights, announce }) {
   container.querySelector('#benefitsButton').addEventListener('click', showBenefits);
   container.querySelector('#benefitsButtonAlt').addEventListener('click', showBenefits);
   container.querySelector('#checkFlightsButton').addEventListener('click', onCheckFlights);
+
+  mountIsland(container.querySelector('#rewardsChart'), AreaTrendChart, {
+    data: rewardsTrend(member.rewards_points),
+    prefix: '',
+  });
 }
