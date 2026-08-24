@@ -330,7 +330,12 @@ export default function DependencyGraph({ graph, assessment, currency = 'SGD' })
             const p = posOf(n.id);
             if (!p) return null;
             const status = verdicts[n.id]?.status ?? n.status;
-            const tone = TONE[STATUS_TONE[status] ?? 'neutral'];
+            const toneKey = STATUS_TONE[status] ?? 'neutral';
+            const tone = TONE[toneKey];
+            // Only bookings the disruption actually reaches carry colour. A
+            // booking that is fine stays plain, so the eye lands on the damage
+            // instead of on seven identical stripes.
+            const affected = toneKey !== 'good' && toneKey !== 'neutral';
             const isSel = n.id === selected;
             const dim = trace && !trace.set.has(n.id);
             return (
@@ -353,10 +358,21 @@ export default function DependencyGraph({ graph, assessment, currency = 'SGD' })
                         fill="none" stroke="var(--primary)" strokeWidth="2" />
                 )}
                 <rect className="dg-card" width={NODE_W} height={NODE_H} rx={13}
-                      fill="var(--canvas)" stroke={isSel ? 'var(--primary)' : 'var(--border)'} />
-                <path d={`M0 4 a4 4 0 0 1 4 -4 v${NODE_H - 8} a4 4 0 0 1 -4 4 z`} fill={tone} />
-                <circle cx={NODE_W - 28} cy={24} r={14} fill="var(--surface-1)" stroke="var(--border-subtle)" />
-                <g style={{ color: 'var(--ink-subdued)' }}><KindGlyph kind={n.kind} /></g>
+                      fill="var(--canvas)"
+                      stroke={isSel ? 'var(--primary)' : affected ? tone : 'var(--border)'} />
+                {affected && (
+                  <rect width={NODE_W} height={NODE_H} rx={13} fill={tone} fillOpacity={0.055} />
+                )}
+                <circle
+                  cx={NODE_W - 28} cy={24} r={14}
+                  fill={affected ? tone : 'var(--surface-1)'}
+                  fillOpacity={affected ? 0.12 : 1}
+                  stroke={affected ? tone : 'var(--border-subtle)'}
+                  strokeOpacity={affected ? 0.4 : 1}
+                />
+                <g style={{ color: affected ? tone : 'var(--ink-subdued)' }}>
+                  <KindGlyph kind={n.kind} />
+                </g>
                 <text x={18} y={25} style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.09em', fill: 'var(--ink-subdued)' }}>
                   {String(n.label ?? '').toUpperCase()}
                 </text>
