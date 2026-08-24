@@ -16,11 +16,34 @@ import { escapeHtml, money } from '../format.js';
 import { icons } from '../icons.js';
 import { closeModal, openModal } from '../components/modal.js';
 import { detectMarkup } from './detect.js';
-import { graphMarkup, impactMarkup } from './graph.js';
+import { impactMarkup } from './graph.js';
 import { traceMarkup } from './trace.js';
 import { historyMarkup, plansMarkup, weightingMarkup } from './plans.js';
 import { renderEditor } from './editor.js';
 import { rollbackDialogMarkup, runMarkup } from './execute.js';
+import { mountIsland, unmountAll } from '../islands/mount.js';
+import DependencyGraph from '../islands/DependencyGraph.jsx';
+import ResolveChoropleth from '../islands/ResolveChoropleth.jsx';
+
+// The three journey legs, west to east, for the "resolving" map. Recovery
+// commits in dependency order, so the legs resolve in this order as the run
+// advances — that is the story the choropleth tells.
+const JOURNEY_LEGS = [
+  { id: 'sg', name: 'Singapore', coordinates: [103.82, 1.35] },
+  { id: 'tokyo', name: 'Tokyo', coordinates: [139.69, 35.68] },
+  { id: 'osaka', name: 'Osaka', coordinates: [135.5, 34.69] },
+];
+
+function computeRegions(run) {
+  const progress = run?.progress ?? 0;
+  const done = run && ['complete'].includes(run.state)
+    ? JOURNEY_LEGS.length
+    : Math.floor(progress * JOURNEY_LEGS.length);
+  return JOURNEY_LEGS.map((leg, i) => ({
+    ...leg,
+    status: i < done ? 'resolved' : i === done ? 'resolving' : 'at_risk',
+  }));
+}
 
 const STAGES = [
   { id: 'detect', label: 'Detect', hint: 'Find the disruption' },
@@ -51,9 +74,8 @@ export function renderRecovery(container, { profiles, currency, onBack, announce
       <p class="eyebrow" style="margin-top:24px">Travel Recovery Orchestrator</p>
       <h2>One cancellation, priced against the whole journey.</h2>
       <p>
-        Every booking on this trip went on the same Card, so the platform can reconstruct the entire
-        itinerary and the dependencies between its parts. That is what makes it possible to answer
-        what the cancellation actually costs, rather than what the new fare costs.
+        Every booking is on one Card, so we can rebuild the itinerary and price what the
+        cancellation really costs — not just the new fare.
       </p>
     </div>
 
@@ -111,10 +133,10 @@ export function renderRecovery(container, { profiles, currency, onBack, announce
 
   function busyPlanning() {
     const messages = [
-      'Flight AI is checking validated replacement inventory…',
-      'Recalculating which downstream bookings are affected…',
-      'Hotel, activity, dining and ground specialists are working in parallel…',
-      'Validating whole-trip options and personalizing the recommendation…',
+      'Checking replacement flights…',
+      'Recalculating affected bookings…',
+      'Rebuilding hotel, dining and ground legs…',
+      'Ranking whole-trip options…',
     ];
     let index = 0;
     busy(messages[index]);
@@ -186,21 +208,30 @@ export function renderRecovery(container, { profiles, currency, onBack, announce
     const assessment = state.graph.assessment;
     body.innerHTML = `
       <div class="section-head">
-        <h3><span class="section-index">2.</span> Dependency graph and impact</h3>
+        <h3><span class="section-index">2.</span> Dependency graph</h3>
         <p>
-          Not every relationship is a hard dependency, which is why this is a graph and not a list.
-          A violated <strong>hard</strong> edge invalidates the booking it points at; a violated
-          <strong>soft</strong> edge only degrades it. Most of what follows is arithmetic —
-          <em>arrival + buffer &gt; start</em> — and needs no model at all.
+          It's a graph, not a list, because not every link is a hard dependency. A broken
+          <strong>hard</strong> edge invalidates the booking it points at; a <strong>soft</strong>
+          one only degrades it. Drag a node to inspect the chain.
         </p>
       </div>
-      <div class="card">${graphMarkup(state.graph, assessment, currency)}</div>
+      <div class="card">
+        <div id="graphHost" class="rf-host-wrap"></div>
+        <div class="graph-legend">
+          <span><i class="key key-hard" aria-hidden="true"></i>Hard — a violation invalidates the booking</span>
+          <span><i class="key key-soft" aria-hidden="true"></i>Soft — a violation only degrades it</span>
+          <span><i class="key key-buffer" aria-hidden="true"></i>Label is the minimum buffer the edge demands</span>
+        </div>
+      </div>
       <div class="card">${impactMarkup(state.graph, assessment, currency)}</div>
       <div class="stage-next">
         <button class="btn btn-primary" type="button" id="toPlan">
           Generate recovery plans ${icons.arrowRight}
         </button>
       </div>`;
+    mountIsland(body.querySelector('#graphHost'), DependencyGraph, {
+      graph: state.graph, assessment, currency,
+    });
     body.querySelector('#toPlan').addEventListener('click', () => go('plan'));
   }
 
@@ -246,9 +277,8 @@ export function renderRecovery(container, { profiles, currency, onBack, announce
       <div class="section-head">
         <h3><span class="section-index">3.</span> Candidate recovery plans</h3>
         <p>
-          Each card is a complete answer, assembled end to end for one objective — not a shortlist of
-          the best flight next to the best hotel change, which would be a plan nobody chose and totals
-          that describe no real trip.
+          Each card is a complete plan, built end to end for one goal — not a mix-and-match of
+          separate best picks.
         </p>
       </div>
 
@@ -309,9 +339,8 @@ export function renderRecovery(container, { profiles, currency, onBack, announce
       <div class="section-head">
         <h3><span class="section-index">4.</span> Adjust the plan</h3>
         <p>
-          Drag an alternative into the booking it belongs to, or press <em>Use</em>. Every change is
-          sent to the backend, which re-propagates the graph and returns the verdict — the browser
-          proposes, it never decides whether the result works.
+          Drag an alternative onto a booking, or press <em>Use</em>. Every change is re-checked on
+          the server — the browser proposes, it never decides.
         </p>
       </div>
       <div id="editorHost"></div>`;
@@ -391,11 +420,24 @@ export function renderRecovery(container, { profiles, currency, onBack, announce
         <h3><span class="section-index">5.</span> Execution</h3>
         <p>
           One transaction at a time, in dependency order, each verified before the next unlocks.
-          Charges are authorised individually. <em>Stop here</em> leaves committed steps in place;
-          <em>Undo everything</em> asks each supplier what it would actually give back first.
+          <em>Stop here</em> leaves committed steps in place; <em>Undo everything</em> asks each
+          supplier what it would actually give back first.
         </p>
       </div>
+      <div class="card resolve-card">
+        <div class="card-head">
+          <div>
+            <p class="eyebrow">Resolving across your journey</p>
+            <h4 class="stage-title">Singapore → Tokyo → Osaka</h4>
+          </div>
+        </div>
+        <div id="resolveHost"></div>
+      </div>
       ${runMarkup(state.run, currency, optionsById())}`;
+
+    mountIsland(body.querySelector('#resolveHost'), ResolveChoropleth, {
+      regions: computeRegions(state.run), progress: state.run.progress ?? 0,
+    });
 
     const advance = body.querySelector('#advanceRun');
     if (advance) advance.addEventListener('click', onAdvance);
@@ -475,6 +517,7 @@ export function renderRecovery(container, { profiles, currency, onBack, announce
 
   function paint() {
     body.removeEventListener('click', onPlanClick);
+    unmountAll(body);
     if (state.stage === 'detect') return paintDetect();
     if (state.stage === 'impact') return paintImpact();
     if (state.stage === 'plan') return paintPlan();
@@ -489,5 +532,6 @@ export function renderRecovery(container, { profiles, currency, onBack, announce
 
   return () => {
     body.removeEventListener('click', onPlanClick);
+    unmountAll(body);
   };
 }

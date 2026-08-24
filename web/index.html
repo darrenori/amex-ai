@@ -13,8 +13,77 @@
 
   <div class="app" id="app">
 
+    <!-- ============ Home ============ -->
+    <section class="view is-active" id="view-home" aria-labelledby="homeHeading">
+      <header class="home-nav on-navy">
+        <div class="wrap home-nav-inner">
+          <a class="brand" href="#" aria-label="TripShield home">
+            <span class="brand-mark" aria-hidden="true">TS</span>
+            <span class="brand-name"><strong>TripShield</strong><span>AMEX Travel</span></span>
+          </a>
+          <button class="btn btn-on-navy" type="button" data-enter-app>Log in</button>
+        </div>
+      </header>
+
+      <div class="home-hero on-navy">
+        <div class="wrap home-hero-grid">
+          <div class="home-copy">
+            <p class="eyebrow" data-animate>For Card Members</p>
+            <h1 id="homeHeading" data-animate>When one booking breaks, the trip shouldn't.</h1>
+            <p class="home-lede" data-animate>
+              TripShield watches your whole itinerary — flights, hotels, cars — and rebuilds it around
+              a disruption in minutes, priced against the entire journey.
+            </p>
+            <div class="home-cta" data-animate>
+              <button class="btn btn-primary" type="button" data-enter-app>Get started</button>
+              <button class="btn btn-on-navy" type="button" data-enter-app>Log in</button>
+            </div>
+            <p class="concept-badge" style="margin-top:24px" data-animate>Hackathon concept · not a live Amex service</p>
+          </div>
+
+          <!-- kokonutui-style live status card -->
+          <div class="glow-card" data-animate>
+            <div class="glow-card-sheen" aria-hidden="true"></div>
+            <div class="glow-card-head">
+              <span class="live-dot" aria-hidden="true"></span>
+              <span>Live recovery</span>
+              <span class="glow-card-tag">SQ638</span>
+            </div>
+            <p class="glow-card-title">Tokyo flight cancelled — 6 bookings at risk</p>
+            <ul class="glow-steps">
+              <li class="is-done"><span aria-hidden="true">✓</span>Replacement flight found</li>
+              <li class="is-done"><span aria-hidden="true">✓</span>Hotel night protected</li>
+              <li class="is-active"><span aria-hidden="true">•</span>Rebuilding onward journey</li>
+            </ul>
+            <div class="glow-bar"><span></span></div>
+            <p class="glow-card-foot">Whole-trip impact priced in real time</p>
+          </div>
+        </div>
+      </div>
+
+      <div class="home-features">
+        <div class="wrap home-feature-grid">
+          <div class="feature-card" data-animate>
+            <span class="icon-badge" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><circle cx="6" cy="6" r="2.4"/><circle cx="18" cy="12" r="2.4"/><circle cx="6" cy="18" r="2.4"/><path d="M8.1 7.2 15.9 11M8.1 16.8 15.9 13.2"/></svg></span>
+            <h3>Whole-trip view</h3>
+            <p>Every booking on one Card, so the dependencies between them are known — not guessed.</p>
+          </div>
+          <div class="feature-card" data-animate>
+            <span class="icon-badge" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3.5 2"/></svg></span>
+            <h3>Priced in minutes</h3>
+            <p>What the cancellation actually costs across the journey — refunds, forfeits and all.</p>
+          </div>
+          <div class="feature-card" data-animate>
+            <span class="icon-badge" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M12 3l7 3v6c0 4.4-3 7.7-7 9-4-1.3-7-4.6-7-9V6z"/><path d="m9 12 2 2 4-4"/></svg></span>
+            <h3>You decide</h3>
+            <p>Ranked plans you can adjust by hand. Nothing is charged until you approve each step.</p>
+          </div>
+        </div>
+      </div>
+    </section>
+
     <!-- ============ Login ============ -->
-    <section class="view is-active" id="view-login" aria-labelledby="loginHeading">
+    <section class="view" id="view-login" aria-labelledby="loginHeading">
       <div class="hero on-navy">
         <div class="hero-scene" aria-hidden="true">
           <svg viewBox="0 0 1600 900" preserveAspectRatio="xMidYMid slice" role="presentation" focusable="false">
@@ -98,9 +167,9 @@
                   <span>AMEX Travel</span>
                 </span>
               </a>
-              <p class="eyebrow" style="margin-top:32px">Arrive with confidence</p>
-              <h1 id="loginHeading">Your journey continues here.</h1>
-              <p>When one booking fails, the rest of the trip is still on your Card. TripShield prices the disruption against the whole journey — flight, hotel and car rental together — and rebooks the way you actually decide.</p>
+              <p class="eyebrow" style="margin-top:32px">Welcome back</p>
+              <h1 id="loginHeading">Your trip, still on track.</h1>
+              <p>One broken booking, priced and rebooked against the whole journey — flight, hotel and car together.</p>
               <div class="hero-badges">
                 <span class="hero-badge">Whole-trip recovery</span>
                 <span class="hero-badge">Personalized to your history</span>
@@ -110,9 +179,9 @@
             </div>
 
             <div class="login-card">
-              <p class="eyebrow">Welcome back</p>
-              <h2 style="margin-top:8px;font-size:var(--text-title)">Log in to your account</h2>
-              <p class="muted" style="margin-top:8px;font-size:var(--text-sm)">Your next trip and membership benefits are ready when you are.</p>
+              <p class="eyebrow">Members</p>
+              <h2 style="margin-top:8px;font-size:var(--text-title)">Log in</h2>
+              <p class="muted" style="margin-top:8px;font-size:var(--text-sm)">Pick up your trip where you left off.</p>
 
               <form id="loginForm" novalidate style="margin-top:24px">
                 <div class="field">

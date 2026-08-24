@@ -1,0 +1,35 @@
+# Render Blueprint — TripShield API.
+#
+# Deploys the FastAPI app in api/index.py as a managed web service. The frontend
+# (Vite build, hosted on Vercel) calls this service by setting VITE_API_BASE to
+# https://<service>.onrender.com/api at build time.
+#
+# Every route is declared under /api, so the health check is /api/health.
+services:
+  - type: web
+    name: tripshield-api
+    runtime: python
+    plan: free
+    region: singapore
+    buildCommand: pip install -r requirements.txt
+    startCommand: uvicorn api.index:app --host 0.0.0.0 --port $PORT
+    healthCheckPath: /api/health
+    autoDeploy: true
+    envVars:
+      - key: PYTHON_VERSION
+        value: "3.12"
+      # Optional AI personalization / read-only travel integrations. Left unset
+      # here — the app degrades gracefully to deterministic fixtures. Set real
+      # values in the Render dashboard, never in source control.
+      - key: AI_PROVIDER
+        sync: false
+      - key: OPENAI_API_KEY
+        sync: false
+      - key: ANTHROPIC_API_KEY
+        sync: false
+      - key: AERODATABOX_API_KEY
+        sync: false
+      - key: DUFFEL_ACCESS_TOKEN
+        sync: false
+      - key: LITEAPI_SANDBOX_KEY
+        sync: false

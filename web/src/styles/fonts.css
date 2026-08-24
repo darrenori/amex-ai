@@ -1,0 +1,65 @@
+/* Benton Sans — the American Express corporate typeface, self-hosted.
+   Files are the licensed OTFs placed in web/src/fonts/. Vite fingerprints the
+   URLs at build. Weights are mapped so the design's heavy use of 600 (headings,
+   tabular figures) resolves to a real Medium face instead of a synthesized one:
+
+     100 Thin · 300 Light · 400 Book · 500 Regular · 600 Medium · 700 Bold · 900 Black
+
+   font-display: swap keeps text visible on the fallback stack while the face
+   loads, so a slow font never blocks a financial figure from rendering. */
+
+@font-face {
+  font-family: "Benton Sans";
+  font-style: normal;
+  font-weight: 100;
+  font-display: swap;
+  src: url("../fonts/BentonSans-Thin.otf") format("opentype");
+}
+
+@font-face {
+  font-family: "Benton Sans";
+  font-style: normal;
+  font-weight: 300;
+  font-display: swap;
+  src: url("../fonts/BentonSans-Light.otf") format("opentype");
+}
+
+@font-face {
+  font-family: "Benton Sans";
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url("../fonts/BentonSans-Book.otf") format("opentype");
+}
+
+@font-face {
+  font-family: "Benton Sans";
+  font-style: normal;
+  font-weight: 500;
+  font-display: swap;
+  src: url("../fonts/BentonSans-Regular.otf") format("opentype");
+}
+
+@font-face {
+  font-family: "Benton Sans";
+  font-style: normal;
+  font-weight: 600;
+  font-display: swap;
+  src: url("../fonts/BentonSans-Medium.otf") format("opentype");
+}
+
+@font-face {
+  font-family: "Benton Sans";
+  font-style: normal;
+  font-weight: 700;
+  font-display: swap;
+  src: url("../fonts/BentonSans-Bold.otf") format("opentype");
+}
+
+@font-face {
+  font-family: "Benton Sans";
+  font-style: normal;
+  font-weight: 900;
+  font-display: swap;
+  src: url("../fonts/BentonSans-Black.otf") format("opentype");
+}

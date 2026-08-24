@@ -1,8 +1,10 @@
 // Thin client for the FastAPI backend in api/index.py.
-// In development Vite proxies /api to http://127.0.0.1:8000 (see vite.config.js);
-// in production Vercel rewrites /api/* onto the Python serverless function.
+// In development Vite proxies /api to http://127.0.0.1:8000 (see vite.config.js).
+// In production the backend runs as a Render web service: set VITE_API_BASE to
+// its URL (e.g. https://tripshield-api.onrender.com/api) at build time. When it
+// is unset the app falls back to the same-origin /api path (Vercel rewrite).
 
-const BASE = '/api';
+const BASE = import.meta.env.VITE_API_BASE || '/api';
 
 // One session per browser tab. Execution runs are keyed off it server-side,
 // because a run records transactions that actually happened and must not be

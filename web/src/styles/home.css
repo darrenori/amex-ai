@@ -1,0 +1,216 @@
+/* Home landing page — a premium navy hero over a light feature strip, with a
+   kokonutui-style "live recovery" card. Amex tokens throughout. */
+
+/* ---------- Nav ---------- */
+
+.home-nav {
+  background: var(--navy-deep);
+}
+
+.home-nav-inner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  min-height: 64px;
+}
+
+/* ---------- Hero ---------- */
+
+.home-hero {
+  position: relative;
+  overflow: hidden;
+  padding-block: var(--space-8) var(--space-9);
+  background:
+    radial-gradient(120% 100% at 82% 10%, rgba(0, 111, 207, 0.32), transparent 58%),
+    linear-gradient(168deg, var(--navy-deep) 0%, var(--navy) 60%, #001233 100%);
+  color: var(--ink-on-navy);
+}
+
+.home-hero-grid {
+  display: grid;
+  gap: var(--space-7);
+  align-items: center;
+}
+
+@media (min-width: 940px) {
+  .home-hero-grid { grid-template-columns: 1fr minmax(340px, 420px); gap: var(--space-8); }
+}
+
+.home-copy h1 {
+  margin-top: var(--space-3);
+  font-size: clamp(32px, 5vw, 52px);
+  letter-spacing: -0.02em;
+  color: var(--ink-on-navy);
+}
+
+.home-lede {
+  margin-top: var(--space-4);
+  max-width: 48ch;
+  font-size: var(--text-section);
+  color: var(--ink-on-navy-muted);
+}
+
+.home-cta {
+  display: flex;
+  gap: var(--space-3);
+  flex-wrap: wrap;
+  margin-top: var(--space-6);
+}
+
+.home-cta .btn { min-height: 48px; padding-inline: var(--space-6); }
+
+/* ---------- kokonutui glow card ---------- */
+
+.glow-card {
+  position: relative;
+  overflow: hidden;
+  padding: var(--space-5);
+  border-radius: var(--radius-lg);
+  background: linear-gradient(160deg, rgba(255, 255, 255, 0.10), rgba(255, 255, 255, 0.03));
+  border: 1px solid rgba(183, 195, 217, 0.28);
+  box-shadow: 0 20px 60px rgba(0, 12, 61, 0.45);
+  backdrop-filter: blur(6px);
+}
+
+.glow-card-sheen {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(115deg, transparent 30%, rgba(255, 255, 255, 0.14) 50%, transparent 70%);
+  transform: translateX(-120%);
+  animation: sheen 4.5s var(--easing) infinite;
+  pointer-events: none;
+}
+
+@keyframes sheen { to { transform: translateX(120%); } }
+
+.glow-card-head {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  font-size: var(--text-xs);
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--ink-on-navy-muted);
+}
+
+.glow-card-tag {
+  margin-left: auto;
+  padding: 2px 8px;
+  border-radius: var(--radius-sm);
+  background: rgba(255, 255, 255, 0.12);
+  color: var(--ink-on-navy);
+  letter-spacing: 0.02em;
+}
+
+.live-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #48d597;
+  box-shadow: 0 0 0 0 rgba(72, 213, 151, 0.6);
+  animation: livePulse 2s ease-out infinite;
+}
+
+@keyframes livePulse {
+  0% { box-shadow: 0 0 0 0 rgba(72, 213, 151, 0.6); }
+  70% { box-shadow: 0 0 0 8px rgba(72, 213, 151, 0); }
+  100% { box-shadow: 0 0 0 0 rgba(72, 213, 151, 0); }
+}
+
+.glow-card-title {
+  margin-top: var(--space-4);
+  font-size: var(--text-body);
+  font-weight: 600;
+  color: var(--ink-on-navy);
+}
+
+.glow-steps {
+  margin-top: var(--space-4);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.glow-steps li {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  font-size: var(--text-sm);
+  color: var(--ink-on-navy-muted);
+}
+
+.glow-steps li span {
+  display: grid;
+  place-items: center;
+  width: 18px;
+  height: 18px;
+  flex: none;
+  border-radius: 50%;
+  font-size: 11px;
+  background: rgba(255, 255, 255, 0.12);
+}
+
+.glow-steps li.is-done { color: var(--ink-on-navy); }
+.glow-steps li.is-done span { background: #1f7a54; color: #d8f5e7; }
+.glow-steps li.is-active span { background: var(--primary); color: #fff; }
+
+.glow-bar {
+  margin-top: var(--space-4);
+  height: 6px;
+  border-radius: var(--radius-pill);
+  background: rgba(255, 255, 255, 0.12);
+  overflow: hidden;
+}
+
+.glow-bar span {
+  display: block;
+  height: 100%;
+  width: 66%;
+  border-radius: var(--radius-pill);
+  background: linear-gradient(90deg, var(--primary), #48d597);
+  animation: fillBar 3s var(--easing) infinite alternate;
+}
+
+@keyframes fillBar { from { width: 58%; } to { width: 74%; } }
+
+.glow-card-foot {
+  margin-top: var(--space-3);
+  font-size: var(--text-xs);
+  color: var(--ink-on-navy-muted);
+}
+
+/* ---------- Feature strip ---------- */
+
+.home-features {
+  background: var(--surface-1);
+  padding-block: var(--space-8);
+}
+
+.home-feature-grid {
+  display: grid;
+  gap: var(--space-4);
+  grid-template-columns: 1fr;
+}
+
+@media (min-width: 780px) {
+  .home-feature-grid { grid-template-columns: repeat(3, 1fr); }
+}
+
+.feature-card {
+  background: var(--canvas);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-card);
+  padding: var(--space-5);
+}
+
+.feature-card .icon-badge { margin-bottom: var(--space-3); }
+.feature-card h3 { font-size: var(--text-section); }
+.feature-card p { margin-top: var(--space-2); font-size: var(--text-sm); color: var(--ink-muted); }
+
+/* data-animate elements start hidden only when motion will run; a no-JS or
+   reduced-motion visitor still sees them because Motion sets opacity inline. */
+@media (prefers-reduced-motion: reduce) {
+  .glow-card-sheen, .live-dot, .glow-bar span { animation: none; }
+}
