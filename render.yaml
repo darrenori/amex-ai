@@ -18,13 +18,16 @@ services:
     envVars:
       - key: PYTHON_VERSION
         value: "3.12"
-      # Optional AI personalization / read-only travel integrations. Left unset
-      # here — the app degrades gracefully to deterministic fixtures. Set real
-      # values in the Render dashboard, never in source control.
+      # AI personalization uses the same secret variable name as Vercel. Set
+      # its real value in Render's dashboard, never in source control.
       - key: AI_PROVIDER
+        value: openai
+      - key: OPENAI_MODEL
+        value: gpt-5.6
+      - key: openai_api_key
         sync: false
-      - key: OPENAI_API_KEY
-        sync: false
+      # Optional read-only travel integrations. The app degrades gracefully to
+      # deterministic fixtures when these values are absent.
       - key: ANTHROPIC_API_KEY
         sync: false
       - key: AERODATABOX_API_KEY

@@ -271,3 +271,11 @@ def test_implicit_selection_prefers_anthropic_and_status_is_import_safe():
     assert status["model"] == ai.DEFAULT_ANTHROPIC_MODEL
     assert status["tools"] == list(TOOL_NAMES)
     assert status["status"] in {"available", "unavailable"}
+
+
+def test_lowercase_deployment_key_selects_openai_with_the_api_model_default():
+    selected = ai._selection({"openai_api_key": "vercel-secret"})
+
+    assert selected["provider"] == "openai"
+    assert selected["api_key"] == "vercel-secret"
+    assert selected["model"] == "gpt-5.6"

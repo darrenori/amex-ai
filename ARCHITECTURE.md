@@ -349,7 +349,7 @@ flowchart LR
     MCP --> P["list_candidate_plans"]
     MCP --> H["get_member_choice_history"]
     MCP --> S["list_specialist_findings"]
-    G & P & H & S --> MODEL["Recommendation AI<br/>Claude or GPT-5.6 Sol"]
+    G & P & H & S --> MODEL["Recommendation AI<br/>Claude or GPT-5.6"]
     MODEL --> VALID["Schema + ID + Pareto validation"]
     VALID -->|valid| COPY["Personalized order + explanation"]
     VALID -->|invalid / timeout| FALLBACK["Deterministic order + explanation"]
@@ -377,6 +377,10 @@ unconfigured provider fails closed rather than crossing providers. Timeouts, rat
 limits, tool-loop errors and invalid structured output all preserve the existing
 deterministic result. The UI says when the deterministic fallback was used and
 never labels that result as AI-personalized.
+
+Deployment uses `AI_PROVIDER=openai`, `OPENAI_MODEL=gpt-5.6`, and the secret
+`openai_api_key` on both Vercel and Render. The runtime also accepts the conventional
+uppercase `OPENAI_API_KEY` name for local development and existing environments.
 
 Profile features and choice history are server-created inputs. The model may use
 them to make a contextual preference decision, but it cannot rewrite the stored

@@ -156,7 +156,7 @@ TripShield has two deliberately separate integration surfaces:
 - Travel inventory and status use direct REST connector adapters. Each read reports
   `live`, `sandbox`, or `fixture` provenance and falls back to complete fixture inventory
   when credentials, availability, currency, or an upstream response are unusable.
-- Claude and GPT-5.6 Sol use embedded, request-bound **TripShield MCP** snapshots.
+- Claude and GPT-5.6 use embedded, request-bound **TripShield MCP** snapshots.
   Each agent receives a role-specific read-only tool allowlist. Specialists can read
   their own recovery tasks, cached validated inventory and member-choice context; the
   Recommendation AI can read the graph, candidate plans, history and specialist findings.
@@ -222,10 +222,10 @@ DUFFEL_ACCESS_TOKEN=<set-in-environment>
 LITEAPI_SANDBOX_KEY=<set-in-environment>
 LITEAPI_HOTEL_IDS=<set-in-environment>
 ANTHROPIC_API_KEY=<set-in-environment>
-OPENAI_API_KEY=<set-in-environment>
-AI_PROVIDER=anthropic                   # or openai; optional
+openai_api_key=<set-in-environment>      # same secret name on Vercel and Render
+AI_PROVIDER=openai                       # optional; selects OpenAI explicitly
 ANTHROPIC_MODEL=claude-sonnet-5         # optional
-OPENAI_MODEL=gpt-5.6-sol                # optional
+OPENAI_MODEL=gpt-5.6                     # optional
 AI_TIMEOUT_SECONDS=8                    # optional
 ```
 
@@ -233,9 +233,12 @@ For local development, copy `.env.example` to the ignored `.env.local`, add valu
 and start the backend with `npm run dev:api:env`. Vercel values belong in the project's
 encrypted Environment Variables settings instead of any committed file.
 
-When `AI_PROVIDER` is unset, Anthropic is preferred when configured, then OpenAI. An
-explicitly selected provider never silently fails over to the other provider. Model
-errors or invalid output are discarded and the deterministic recommendation remains.
+The deployed configuration uses `AI_PROVIDER=openai` and the `openai_api_key` secret
+on both Vercel and Render. The conventional `OPENAI_API_KEY` spelling remains accepted
+for local development. When `AI_PROVIDER` is unset, Anthropic is preferred when
+configured, then OpenAI. An explicitly selected provider never silently fails over to
+the other provider. Model errors or invalid output are discarded and the deterministic
+recommendation remains.
 
 ## Cancel means two different things
 

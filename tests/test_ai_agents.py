@@ -171,7 +171,7 @@ def test_orchestrator_runs_flight_first_then_downstream_specialists_concurrently
 
 def test_planning_api_is_honest_when_no_model_provider_is_configured(monkeypatch):
     for key in (
-        "AI_PROVIDER", "ANTHROPIC_API_KEY", "OPENAI_API_KEY",
+        "AI_PROVIDER", "ANTHROPIC_API_KEY", "OPENAI_API_KEY", "openai_api_key",
         "ANTHROPIC_MODEL", "OPENAI_MODEL",
     ):
         monkeypatch.delenv(key, raising=False)

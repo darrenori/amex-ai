@@ -30,7 +30,10 @@ except (ImportError, ModuleNotFoundError):  # pragma: no cover - environment dep
 
 
 DEFAULT_ANTHROPIC_MODEL = "claude-sonnet-5"
-DEFAULT_OPENAI_MODEL = "gpt-5.6-sol"
+# The API quickstart currently uses this Responses API model. Keep the model
+# configurable, but choose a documented API model rather than an internal
+# serving-tier name as the deploy-safe default.
+DEFAULT_OPENAI_MODEL = "gpt-5.6"
 DEFAULT_TIMEOUT_SECONDS = 8.0
 MAX_MODEL_ROUNDS = 5
 
@@ -104,7 +107,12 @@ def _selection(source: Optional[Mapping[str, str]] = None) -> Dict[str, Any]:
         }
 
     anthropic_key = str(environ.get("ANTHROPIC_API_KEY", "")).strip()
-    openai_key = str(environ.get("OPENAI_API_KEY", "")).strip()
+    # Vercel project variables are case-sensitive at runtime. This project is
+    # configured with the user-facing `openai_api_key` name; retain the
+    # conventional uppercase spelling for local shells and existing deploys.
+    openai_key = str(
+        environ.get("openai_api_key") or environ.get("OPENAI_API_KEY", "")
+    ).strip()
     if explicit:
         provider = explicit
     elif anthropic_key:
