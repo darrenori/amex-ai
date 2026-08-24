@@ -61,9 +61,8 @@ export function detectMarkup(detection) {
     <div class="section-head">
       <h3><span class="section-index">1.</span> Detection</h3>
       <p>
-        TripShield automatically checks upcoming flights for important travel changes. It found this
-        disruption early, so the rest of the trip can be reviewed before you need to contact each
-        travel provider yourself.
+        TripShield watches your flights and caught this one early, before you'd have to
+        call a single provider.
       </p>
     </div>
 

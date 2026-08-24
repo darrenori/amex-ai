@@ -839,9 +839,117 @@ def _domestic_inventory() -> List[InventoryItem]:
     ]
 
 
+# Amex's own programme listing pages, per city and per collection. A supplier's
+# marketing page is deliberately not used as a link here: see amex_partners.py.
+_AMEX_OSAKA = ("https://www.americanexpress.com/en-sg/travel/discover/"
+               "property-results/c/27/dt/4/d/Osaka%2CJapan")
+_AMEX_FHR = "https://www.americanexpress.com/en-sg/travel/discover/fine-hotels-resorts/"
+_AMEX_HOTELS = "https://www.americanexpress.com/en-sg/travel/hotels/"
+
+
+def _lodging_osaka_inventory() -> List[InventoryItem]:
+    """Recovery options for the Osaka leg.
+
+    The domestic flight lands after the original 16:00 check-in, so this task is
+    always reachable once the outbound is disrupted. Without these the
+    Accommodation Agent searched, found nothing and failed the task outright.
+    """
+    osaka = dict(
+        booking_id="bk_hotel_osaka",
+        kind=BookingKind.LODGING,
+        location="Umeda, Osaka",
+        place_code="OSA",
+        action="lodging.book",
+        compensating_action="lodging.cancel",
+    )
+    return [
+        InventoryItem(
+            id="opt_lod_osa_keep", offer_id="rate_keep_2XT80M4",
+            title="Keep the booking, flag a late arrival",
+            detail="Hotel Granvia Osaka holds the room and the desk is told to expect a late check-in",
+            supplier="Hotel Granvia Osaka",
+            start=jst(21, 22, 0), end=jst(23, 11, 0),
+            cost_delta=0.0, changes_booking=False, quality=0.95,
+            notes=["No money moves and the rate stays fully refundable."],
+            requires_payment=False,
+            meta={"nights": 2},
+            **osaka,
+            reliability_risk=0.04,
+            links=[{"label": "Hotel Granvia Osaka on Amex Travel", "url": _AMEX_OSAKA}],
+        ),
+        InventoryItem(
+            id="opt_lod_osa_shift", offer_id="rate_amend_2XT80M4_late",
+            title="Shift check-in to 22 September",
+            detail="One night released at no charge because the rate cancels free up to 24 hours ahead",
+            supplier="Hotel Granvia Osaka",
+            start=jst(22, 16, 0), end=jst(23, 11, 0),
+            cost_delta=-280.0, changes_booking=True, quality=0.71,
+            notes=["The released night is refunded in full, not forfeited."],
+            meta={"nights": 1, "refunded": 280.0},
+            **osaka,
+            reliability_risk=0.05,
+            links=[{"label": "Manage this rate on Amex Travel", "url": _AMEX_OSAKA}],
+        ),
+        InventoryItem(
+            id="opt_lod_osa_station", offer_id="rate_new_OSA_STATION",
+            title="Move to a hotel inside Osaka Station",
+            detail="Same concourse as the arrival platform, so a late landing still makes check-in",
+            supplier="Amex Travel — Osaka Station properties",
+            start=jst(21, 21, 0), end=jst(23, 11, 0),
+            cost_delta=64.0, changes_booking=True, quality=0.83,
+            notes=["Charged to the same Card, so no new payment method is needed."],
+            meta={"nights": 2},
+            **osaka,
+            reliability_risk=0.07,
+            links=[{"label": "Compare Osaka Station hotels", "url": _AMEX_HOTELS}],
+        ),
+        InventoryItem(
+            id="opt_lod_osa_fhr", offer_id="rate_new_OSA_FHR",
+            title="Rebook into a Fine Hotels + Resorts property",
+            detail="Adds credit, late checkout and breakfast on the Platinum Card benefit",
+            supplier="Amex Fine Hotels + Resorts",
+            start=jst(21, 21, 30), end=jst(23, 12, 0),
+            cost_delta=190.0, changes_booking=True, quality=0.90,
+            notes=["Benefits apply only when the stay is booked through Amex Travel."],
+            meta={"nights": 2},
+            **osaka,
+            reliability_risk=0.06,
+            links=[{"label": "Fine Hotels + Resorts", "url": _AMEX_FHR}],
+        ),
+    ]
+
+
+# What each connector tool *does*, in the language the trace should speak. The
+# raw endpoint is kept alongside it rather than thrown away, so the technical
+# reading is still one hover away.
+TOOL_LABELS: Dict[str, str] = {
+    "search_offers": "Search replacement fares",
+    "request_change": "Request a change quote",
+    "confirm_change": "Confirm the change",
+    "quote_cancellation": "Quote the cancellation",
+    "confirm_cancellation": "Confirm the cancellation",
+    "search_rates": "Search room rates",
+    "prebook": "Hold the rate",
+    "book": "Book the room",
+    "cancel": "Cancel the booking",
+    "search_products": "Search tickets",
+    "availability": "Check availability",
+    "search_availability": "Check availability",
+    "modify_reservation": "Move the reservation",
+    "cancel_reservation": "Cancel the reservation",
+    "search_schedules": "Search departures",
+}
+
+
+def tool_label(tool: str) -> str:
+    """Plain-English name for a connector tool, falling back to its key."""
+    return TOOL_LABELS.get(tool, tool.replace("_", " ").strip().capitalize())
+
+
 INVENTORY: List[InventoryItem] = (
     _flight_inventory()
     + _lodging_inventory()
+    + _lodging_osaka_inventory()
     + _activity_inventory()
     + _dining_inventory()
     + _ground_inventory()
@@ -940,6 +1048,10 @@ def _booking_parameters(booking_id: str, itinerary: Any = None) -> Dict[str, Any
         "bk_hotel_tokyo": {
             "checkin": "2026-09-18", "checkout": "2026-09-21", "city": "Tokyo",
             "place_code": "TYO", "refundable": 600.0,
+        },
+        "bk_hotel_osaka": {
+            "checkin": "2026-09-21", "checkout": "2026-09-23", "city": "Osaka",
+            "place_code": "OSA", "refundable": 560.0,
         },
     }
     params = dict(defaults.get(booking_id, {}))

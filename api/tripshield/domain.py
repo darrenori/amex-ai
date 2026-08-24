@@ -267,7 +267,8 @@ class Option:
     reliability_risk: float = 0.05
     links: List[Dict[str, str]] = field(default_factory=list)
     notes: List[str] = field(default_factory=list)
-    tool_call: str = ""          # adapter call that produced it, shown in the trace
+    tool_call: str = ""          # plain-English name of the call, shown in the trace
+    tool_endpoint: str = ""      # the raw adapter/REST call behind it, kept for the audit
     # Provenance is kept separate from the connector name. A Duffel-backed
     # option, for example, may still be a recorded fixture when its sandbox is
     # unavailable. The UI and audit trail must be able to say which is which.
@@ -310,6 +311,7 @@ class Option:
             "links": self.links,
             "notes": self.notes,
             "tool_call": self.tool_call,
+            "tool_endpoint": self.tool_endpoint,
             "source_mode": self.source_mode,
             "source_upstream": self.source_upstream,
             "source_note": self.source_note,

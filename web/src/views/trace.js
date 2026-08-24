@@ -52,7 +52,7 @@ function taskCard(task, optionsById) {
         <span class="icon-badge good" aria-hidden="true">${icons.check}</span>
         <span>
           <span class="trace-opt">${escapeHtml(option.title)}</span>
-          <span class="trace-meta">${escapeHtml(signedMoney(option.cost_delta))} · ${escapeHtml(option.tool_call)}</span>
+          <span class="trace-meta" title="${escapeHtml(option.tool_endpoint ?? '')}">${escapeHtml(signedMoney(option.cost_delta))} · ${escapeHtml(option.tool_call)}</span>
         </span>
       </li>`)
     .join('');

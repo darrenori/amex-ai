@@ -134,7 +134,8 @@ class RecoveryAgent:
             reliability_risk=item.reliability_risk,
             links=list(item.links),
             notes=list(item.notes),
-            tool_call=f"{spec.adapter} · {spec.tools.get(tool, item.action)}",
+            tool_call=connectors.tool_label(tool),
+            tool_endpoint=f"{spec.adapter} · {spec.tools.get(tool, item.action)}",
             source_mode=getattr(item, "source_mode", "fixture"),
             source_upstream=getattr(item, "upstream", "") or spec.upstream,
             source_note=getattr(item, "source_note", ""),
@@ -229,14 +230,26 @@ class AccommodationRecoveryAgent(RecoveryAgent):
                 return f"the wait is only {(departs_at - disrupted_at).total_seconds() / 3600:.1f}h"
             return True
 
+        # Keeping the room is the option that turns on making the desk in time;
+        # anything that rebooks sets its own check-in and is judged on nights.
         cutoff = task.constraints.get("latest_check_in")
-        if cutoff and item.id == "opt_lod_keep" and reachable > datetime.fromisoformat(cutoff):
+        if cutoff and not item.changes_booking and reachable > datetime.fromisoformat(cutoff):
             return f"reachable at {reachable:%d %b %H:%M}, past the {datetime.fromisoformat(cutoff):%H:%M} desk cut-off"
+
+        # A stay can sit days downstream of the disruption — the Osaka leg
+        # follows the domestic flight, not the cancelled outbound one. Nights
+        # given up are measured from the booking's own check-in, so a stay that
+        # was never in the delay's path is not accused of forfeiting nights.
+        booking = itinerary.bookings.get(task.booking_id)
+        original_start = getattr(booking, "start", None)
+        latest_sensible = reachable.date()
+        if original_start is not None:
+            latest_sensible = max(latest_sensible, original_start.date())
 
         if item.start.date() < reachable.date():
             return f"check-in date {item.start:%d %b} is before the member can arrive"
-        if item.start.date() > reachable.date() + timedelta(days=1):
-            return f"gives up more nights than the delay requires"
+        if item.start.date() > latest_sensible + timedelta(days=1):
+            return "gives up more nights than the delay requires"
         return True
 
     def rank(self, item, task):

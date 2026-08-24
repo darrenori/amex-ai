@@ -338,8 +338,7 @@ export function renderRecovery(container, { profiles, currency, onBack, announce
       <div class="section-head">
         <h3><span class="section-index">4.</span> Adjust the plan</h3>
         <p>
-          Drag an alternative onto a booking, or press <em>Use</em>. Every change is re-checked on
-          the server — the browser proposes, it never decides.
+          Drag an alternative onto a booking — the browser proposes, the server decides.
         </p>
       </div>
       <div id="editorHost"></div>`;
@@ -419,8 +418,6 @@ export function renderRecovery(container, { profiles, currency, onBack, announce
         <h3><span class="section-index">5.</span> Execution</h3>
         <p>
           One transaction at a time, in dependency order, each verified before the next unlocks.
-          <em>Stop here</em> leaves committed steps in place; <em>Undo everything</em> asks each
-          supplier what it would actually give back first.
         </p>
       </div>
       <div class="card resolve-card">
