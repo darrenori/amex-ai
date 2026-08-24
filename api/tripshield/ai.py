@@ -34,6 +34,9 @@ DEFAULT_OPENAI_MODEL = "gpt-5.6-sol"
 DEFAULT_TIMEOUT_SECONDS = 8.0
 MAX_MODEL_ROUNDS = 5
 
+# Strict structured output rejects `uniqueItems` (OpenAI returns 400
+# invalid_json_schema before it even reads the request), so uniqueness of the
+# referenced-id arrays is asserted in `_validated_output` instead of declared.
 AI_OUTPUT_SCHEMA: Dict[str, Any] = {
     "type": "object",
     "additionalProperties": False,
@@ -53,12 +56,10 @@ AI_OUTPUT_SCHEMA: Dict[str, Any] = {
         "referenced_plan_ids": {
             "type": "array",
             "items": {"type": "string"},
-            "uniqueItems": True,
         },
         "referenced_option_ids": {
             "type": "array",
             "items": {"type": "string"},
-            "uniqueItems": True,
         },
     },
     "required": [

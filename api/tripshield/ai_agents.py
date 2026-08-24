@@ -13,6 +13,9 @@ from . import ai
 from .mcp_server import create_role_scoped_mcp
 
 
+# Strict structured output rejects `uniqueItems` (OpenAI returns 400
+# invalid_json_schema before the call is costed), so every id array below has its
+# uniqueness enforced by `_require_unique_strings` at parse time instead.
 SPECIALIST_OUTPUT_SCHEMA: Dict[str, Any] = {
     "type": "object",
     "additionalProperties": False,
@@ -27,7 +30,6 @@ SPECIALIST_OUTPUT_SCHEMA: Dict[str, Any] = {
                     "ordered_option_ids": {
                         "type": "array",
                         "items": {"type": "string"},
-                        "uniqueItems": True,
                     },
                     "recommended_option_id": {"type": "string"},
                     "rationale": {"type": "string", "minLength": 1, "maxLength": 1200},
@@ -38,7 +40,6 @@ SPECIALIST_OUTPUT_SCHEMA: Dict[str, Any] = {
                     "deprioritized_option_ids": {
                         "type": "array",
                         "items": {"type": "string"},
-                        "uniqueItems": True,
                     },
                 },
                 "required": [
@@ -64,7 +65,6 @@ RECOMMENDATION_OUTPUT_SCHEMA: Dict[str, Any] = {
         "ordered_plan_ids": {
             "type": "array",
             "items": {"type": "string"},
-            "uniqueItems": True,
         },
         "ranking_rationale": {"type": "string", "minLength": 1, "maxLength": 2500},
         "member_explanation": {"type": "string", "minLength": 1, "maxLength": 1600},
@@ -85,12 +85,10 @@ RECOMMENDATION_OUTPUT_SCHEMA: Dict[str, Any] = {
         "referenced_plan_ids": {
             "type": "array",
             "items": {"type": "string"},
-            "uniqueItems": True,
         },
         "referenced_option_ids": {
             "type": "array",
             "items": {"type": "string"},
-            "uniqueItems": True,
         },
     },
     "required": [

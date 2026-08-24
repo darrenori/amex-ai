@@ -210,17 +210,16 @@ export function renderRecovery(container, { profiles, currency, onBack, announce
       <div class="section-head">
         <h3><span class="section-index">2.</span> Dependency graph</h3>
         <p>
-          It's a graph, not a list, because not every link is a hard dependency. A broken
-          <strong>hard</strong> edge invalidates the booking it points at; a <strong>soft</strong>
-          one only degrades it. Drag a node to inspect the chain.
+          A graph, not a list: a <strong>hard</strong> link cancels what it feeds;
+          a <strong>soft</strong> one only frays it.
         </p>
       </div>
       <div class="card">
         <div id="graphHost" class="rf-host-wrap"></div>
         <div class="graph-legend">
-          <span><i class="key key-hard" aria-hidden="true"></i>Hard — a violation invalidates the booking</span>
-          <span><i class="key key-soft" aria-hidden="true"></i>Soft — a violation only degrades it</span>
-          <span><i class="key key-buffer" aria-hidden="true"></i>Label is the minimum buffer the edge demands</span>
+          <span><i class="key key-hard" aria-hidden="true"></i>Hard link</span>
+          <span><i class="key key-soft" aria-hidden="true"></i>Soft link</span>
+          <span><i class="key key-buffer" aria-hidden="true"></i>Min buffer</span>
         </div>
       </div>
       <div class="card">${impactMarkup(state.graph, assessment, currency)}</div>

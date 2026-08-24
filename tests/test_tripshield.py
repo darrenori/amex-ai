@@ -491,3 +491,34 @@ def test_connector_report_names_real_upstreams(client):
     for connector in payload["connectors"]:
         assert connector["tools"], connector["server"]
         assert connector["docs"].startswith("https://")
+
+
+def test_strict_schemas_carry_no_keywords_openai_rejects():
+    """OpenAI's strict structured-output mode rejects a schema containing
+    ``uniqueItems`` with a 400 before the call is ever costed, which silently
+    failed every agent round. Uniqueness is enforced in Python at parse time
+    (``_validated_output`` / ``_require_unique_strings``), so the keyword must
+    not creep back into a schema that is sent with ``strict: True``."""
+    from api.tripshield.ai import AI_OUTPUT_SCHEMA
+    from api.tripshield.ai_agents import (
+        RECOMMENDATION_OUTPUT_SCHEMA,
+        SPECIALIST_OUTPUT_SCHEMA,
+    )
+
+    banned = {"uniqueItems", "minItems", "maxItems", "pattern", "format"}
+
+    def walk(node, path="root"):
+        if isinstance(node, dict):
+            for key, value in node.items():
+                assert key not in banned, f"{path}: '{key}' is not permitted in strict mode"
+                walk(value, f"{path}.{key}")
+        elif isinstance(node, list):
+            for i, item in enumerate(node):
+                walk(item, f"{path}[{i}]")
+
+    for name, schema in [
+        ("AI_OUTPUT_SCHEMA", AI_OUTPUT_SCHEMA),
+        ("SPECIALIST_OUTPUT_SCHEMA", SPECIALIST_OUTPUT_SCHEMA),
+        ("RECOMMENDATION_OUTPUT_SCHEMA", RECOMMENDATION_OUTPUT_SCHEMA),
+    ]:
+        walk(schema, name)
