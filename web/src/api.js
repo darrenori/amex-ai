@@ -1,10 +1,23 @@
 // Thin client for the FastAPI backend in api/index.py.
-// In development Vite proxies /api to http://127.0.0.1:8000 (see vite.config.js).
-// In production the backend runs as a Render web service: set VITE_API_BASE to
-// its URL (e.g. https://tripshield-api.onrender.com/api) at build time. When it
-// is unset the app falls back to the same-origin /api path (Vercel rewrite).
+//
+// In development Vite proxies /api to the local uvicorn (see vite.config.js).
+// In production the backend is a Render web service, and that is the default
+// rather than something a deployment has to remember to configure.
+//
+// It used to fall back to same-origin /api, which on a serverless host meant
+// the frontend quietly talked to a second, serverless copy of the API. That
+// copy cannot work: sessions and execution runs live in process (see store.py),
+// so approving a plan lands on a different instance and 410s, and one plan
+// request runs six agents for the better part of a minute, well past a function
+// duration limit. The symptoms — every agent timing out, Execute never
+// unlocking — looked like application bugs and were not.
+//
+// VITE_API_BASE still overrides this, for a self-hosted or local-network API.
 
-const BASE = import.meta.env.VITE_API_BASE || '/api';
+const PRODUCTION_API = 'https://tripshield-api.onrender.com/api';
+
+const BASE = import.meta.env.VITE_API_BASE
+  || (import.meta.env.DEV ? '/api' : PRODUCTION_API);
 
 // One session per browser tab. Execution runs are keyed off it server-side,
 // because a run records transactions that actually happened and must not be
