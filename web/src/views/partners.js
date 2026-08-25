@@ -83,7 +83,7 @@ export function optionServiceLinkMarkup(option, { className = 'option-service-li
   return `
     <a class="${escapeHtml(className)}" href="${escapeHtml(service.url)}"
        target="_blank" rel="noopener noreferrer"
-       aria-label="${escapeHtml(`${option.title} — ${service.label} (opens in a new tab)`)}">
+       aria-label="${escapeHtml(`${option.title}, ${service.label} (opens in a new tab)`)}">
       <span>${escapeHtml(option.title)}</span><span aria-hidden="true">↗</span>
     </a>`;
 }

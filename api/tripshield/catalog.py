@@ -1,4 +1,4 @@
-"""The demonstration booking history — the orchestrator's single source of truth.
+"""The demonstration booking history, the orchestrator's single source of truth.
 
 Because every component of this trip was charged to the same Card, the platform
 can answer ``GET /user/bookings`` for the whole journey instead of asking each
@@ -7,8 +7,8 @@ supplier separately. That one fact is what makes the dependency graph buildable.
 Grounding
 ---------
 Carriers, routes, properties and attractions are real and really do connect the
-way they are modelled here (SQ flies SIN–NRT; the Narita Express runs NRT into
-Tokyo; Jetstar Japan flies NRT–KIX; Hilton Tokyo Bay is the Maihama resort hotel
+way they are modelled here (SQ flies SIN, NRT; the Narita Express runs NRT into
+Tokyo; Jetstar Japan flies NRT, KIX; Hilton Tokyo Bay is the Maihama resort hotel
 beside Tokyo Disney Resort; Hotel Granvia Osaka sits inside Osaka Station).
 
 Flight numbers, prices, seat availability, references and the member are
@@ -17,7 +17,7 @@ synthetic. No booking here exists.
 
 from __future__ import annotations
 
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timedelta, timezone, date
 from typing import Dict, List
 
 from .domain import Booking, BookingKind, Dependency, DependencyType, Flexibility, Severity
@@ -33,12 +33,44 @@ DISCLAIMER = (
 )
 
 
+# The trip is anchored to today rather than to a fixed month. A demo pinned to a
+# calendar date silently rots: the itinerary slides into the past, "check in on
+# 18 Sep" becomes a date that has already happened, and every downstream
+# deadline the agents reason about is wrong. Day 18 of the trip month is the
+# outbound, so the whole itinerary keeps its internal shape while always sitting
+# a few weeks ahead of whoever is looking at it.
+TRIP_LEAD_DAYS = 24
+
+
+def _trip_month() -> tuple[int, int]:
+    """Year and month whose day-18 is at least TRIP_LEAD_DAYS from now."""
+    today = datetime.now(SGT).date()
+    year, month = today.year, today.month
+    # Walk forward until the outbound (day 18) is comfortably in the future.
+    for _ in range(13):
+        if date(year, month, 18) - today >= timedelta(days=TRIP_LEAD_DAYS):
+            return year, month
+        month += 1
+        if month > 12:
+            month, year = 1, year + 1
+    return year, month
+
+
+TRIP_YEAR, TRIP_MONTH = _trip_month()
+
+
 def sgt(day: int, hour: int, minute: int = 0) -> datetime:
-    return datetime(2026, 9, day, hour, minute, tzinfo=SGT)
+    return datetime(TRIP_YEAR, TRIP_MONTH, day, hour, minute, tzinfo=SGT)
 
 
 def jst(day: int, hour: int, minute: int = 0) -> datetime:
-    return datetime(2026, 9, day, hour, minute, tzinfo=JST)
+    return datetime(TRIP_YEAR, TRIP_MONTH, day, hour, minute, tzinfo=JST)
+
+
+def _booked_on(days_before_outbound: int) -> str:
+    """Statement dates read back from the outbound, so they stay in the past."""
+    stamp = date(TRIP_YEAR, TRIP_MONTH, 18) - timedelta(days=days_before_outbound)
+    return f"{stamp.day} {stamp:%b}"
 
 
 # ---------------------------------------------------------------------------
@@ -87,12 +119,12 @@ BENEFITS = [
 ]
 
 TRANSACTIONS = [
-    {"merchant": "Singapore Airlines", "category": "Airline", "date": "14 Aug", "amount": 3200.00, "status": "posted"},
-    {"merchant": "Hilton Tokyo Bay", "category": "Lodging", "date": "14 Aug", "amount": 900.00, "status": "posted"},
-    {"merchant": "Hotel Granvia Osaka", "category": "Lodging", "date": "14 Aug", "amount": 560.00, "status": "posted"},
-    {"merchant": "Jetstar Japan", "category": "Airline", "date": "15 Aug", "amount": 190.00, "status": "pending"},
-    {"merchant": "Tokyo Disney Resort", "category": "Attraction", "date": "15 Aug", "amount": 80.00, "status": "posted"},
-    {"merchant": "Travel credit", "category": "Statement credit", "date": "16 Aug", "amount": -200.00, "status": "posted"},
+    {"merchant": "Singapore Airlines", "category": "Airline", "date": _booked_on(35), "amount": 3200.00, "status": "posted"},
+    {"merchant": "Hilton Tokyo Bay", "category": "Lodging", "date": _booked_on(35), "amount": 900.00, "status": "posted"},
+    {"merchant": "Hotel Granvia Osaka", "category": "Lodging", "date": _booked_on(35), "amount": 560.00, "status": "posted"},
+    {"merchant": "Jetstar Japan", "category": "Airline", "date": _booked_on(34), "amount": 190.00, "status": "pending"},
+    {"merchant": "Tokyo Disney Resort", "category": "Attraction", "date": _booked_on(34), "amount": 80.00, "status": "posted"},
+    {"merchant": "Travel credit", "category": "Statement credit", "date": _booked_on(33), "amount": -200.00, "status": "posted"},
 ]
 
 
@@ -101,7 +133,7 @@ TRANSACTIONS = [
 # ---------------------------------------------------------------------------
 
 def build_bookings() -> Dict[str, Booking]:
-    """Fresh objects on every call — the graph mutates status in place."""
+    """Fresh objects on every call, the graph mutates status in place."""
 
     bookings = [
         Booking(
@@ -158,7 +190,7 @@ def build_bookings() -> Dict[str, Booking]:
             amount=900.0,
             refundable=600.0,
             flexibility=Flexibility.SHIFTABLE,
-            note="Guaranteed for late arrival until 02:00 — after that the night is gone.",
+            note="Guaranteed for late arrival until 02:00, after that the night is gone.",
             meta={
                 "nights": 3,
                 "rate_per_night": 300.0,
@@ -311,7 +343,7 @@ def build_dependencies() -> List[Dependency]:
 
 TRIP_META = {
     "id": "TRP-2026-0918-SIN-NRT-KIX",
-    "dates": "18–23 September 2026",
+    "dates": "18, 23 September 2026",
     "origin": {"code": "SIN", "city": "Singapore", "airport": "Singapore Changi"},
     "destination": {"code": "NRT", "city": "Tokyo", "airport": "Tokyo Narita"},
     "onward": {"code": "KIX", "city": "Osaka", "airport": "Kansai International"},

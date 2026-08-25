@@ -118,7 +118,7 @@ export function renderEditor(container, {
               <p class="lane-empty">
                 ${group.optional
                   ? 'Not added. Drop an option here to include it, or press <em>Use</em>.'
-                  : 'Untouched — this booking stays exactly as it was. Drop an option here to change that.'}
+                  : 'Untouched, this booking stays exactly as it was. Drop an option here to change that.'}
               </p>`}
           </div>
 
@@ -176,7 +176,7 @@ export function renderEditor(container, {
           ${plan.violations.map((v) => `
             <li class="viol-${escapeHtml(v.severity)}">
               <strong>${v.severity === 'hard' ? 'Blocks the plan' : 'Tight'}</strong>
-              ${escapeHtml(bookingsById[v.booking_id]?.title ?? v.booking_id)} — ${escapeHtml(v.message)}
+              ${escapeHtml(bookingsById[v.booking_id]?.title ?? v.booking_id)}, ${escapeHtml(v.message)}
               ${v.edge ? `<span class="viol-edge">${escapeHtml(v.edge.rationale)}</span>` : ''}
             </li>`).join('')}
         </ul>` : `

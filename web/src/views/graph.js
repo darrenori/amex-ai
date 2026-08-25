@@ -107,7 +107,7 @@ export function graphMarkup(graph, assessment, currency) {
     const { tone, status } = nodeTone(node, verdicts[node.id]);
     return `
       <g class="gnode gnode-${tone}" transform="translate(${p.x} ${p.y})">
-        <title>${escapeHtml(node.title)} — ${escapeHtml(statusLabel[status] ?? status)}</title>
+        <title>${escapeHtml(node.title)}, ${escapeHtml(statusLabel[status] ?? status)}</title>
         <rect width="${NODE_W}" height="${NODE_H}" rx="10"/>
         <rect width="4" height="${NODE_H}" rx="2" class="gnode-spine"/>
         <text class="gnode-label" x="16" y="24">${escapeHtml(node.label.toUpperCase())}</text>
@@ -139,8 +139,8 @@ export function graphMarkup(graph, assessment, currency) {
     </div>
 
     <div class="graph-legend">
-      <span><i class="key key-hard" aria-hidden="true"></i>Hard — a violation invalidates the booking</span>
-      <span><i class="key key-soft" aria-hidden="true"></i>Soft — a violation only degrades it</span>
+      <span><i class="key key-hard" aria-hidden="true"></i>Hard, a violation invalidates the booking</span>
+      <span><i class="key key-soft" aria-hidden="true"></i>Soft, a violation only degrades it</span>
       <span><i class="key key-buffer" aria-hidden="true"></i>Label is the minimum buffer the edge demands</span>
     </div>`;
 }
@@ -170,9 +170,9 @@ export function impactMarkup(graph, assessment, currency) {
         </th>
         <td><span class="chip chip-${tone}"><span class="dot"></span>${escapeHtml(statusLabel[status] ?? status)}</span></td>
         <td class="num">${slack === null || slack === undefined
-          ? '—'
+          ? ', '
           : `<span class="${slack < 0 ? 'crit' : 'pos'}">${slack < 0 ? '−' : '+'}${minutesLabel(slack)}</span>`}</td>
-        <td class="num">${verdict?.exposure ? `<span class="neg">${escapeHtml(money(verdict.exposure, currency))}</span>` : '—'}</td>
+        <td class="num">${verdict?.exposure ? `<span class="neg">${escapeHtml(money(verdict.exposure, currency))}</span>` : ', '}</td>
         <td class="reason">${escapeHtml(verdict?.reason ?? '')}</td>
       </tr>`;
   }).join('');

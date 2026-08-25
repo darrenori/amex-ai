@@ -785,7 +785,12 @@
   font-size: 10px;
   letter-spacing: 0.04em;
   color: var(--ink-subdued);
-  white-space: nowrap;
+  /* Reason codes are short tokens, but the model's trade-off lines are
+     sentences. `nowrap` sent those straight through the card's right edge, so
+     they wrap and the chip is allowed to take a whole row. */
+  max-width: 100%;
+  white-space: normal;
+  overflow-wrap: anywhere;
 }
 
 /* `.journey-actions` / `.journey-action` are defined in app.css and shared with

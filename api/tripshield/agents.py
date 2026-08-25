@@ -132,7 +132,14 @@ class RecoveryAgent:
             drops_booking=item.drops_booking,
             optional=bool(item.meta.get("supplementary")),
             reliability_risk=item.reliability_risk,
-            links=list(item.links),
+            # The specific link the member acts on comes first; anything the
+            # fixture carries (a reviewed partner page, a benefit) follows it.
+            links=connectors.option_links(item) + [
+                link for link in item.links
+                if link.get("url") not in {
+                    generated["url"] for generated in connectors.option_links(item)
+                }
+            ],
             notes=list(item.notes),
             tool_call=connectors.tool_label(tool),
             tool_endpoint=f"{spec.adapter} · {spec.tools.get(tool, item.action)}",

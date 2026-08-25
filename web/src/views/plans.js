@@ -13,11 +13,17 @@ import { collectLinks, optionServiceLinkMarkup, partnerLinksMarkup } from './par
 
 const OBJECTIVE_DOMAIN = { cost: 700, hours: 48, changed: 7, risk: 0.5 };
 
+// Model prose reaches the member through here. Two things are stripped: the
+// internal Pareto vocabulary, and dashes, which a model reaches for constantly
+// and which read as machine-written. A comma does the same job.
 function memberFacingText(value) {
   return String(value ?? '')
     .split('. ')
     .filter((sentence) => !/pareto/i.test(sentence))
     .join('. ')
+    .replace(/\s*[\u2014\u2013]\s*/g, ', ')
+    .replace(/\s+,/g, ',')
+    .replace(/,\s*,/g, ',')
     .trim();
 }
 
@@ -201,7 +207,7 @@ export function weightingMarkup(ranking, profiles, activeProfileId, activePriori
     <div class="weight-block">
       <p class="weight-lead">
         The member never sees this control. Their weighting is already inferred from what they chose
-        the last time they had this trade-off in front of them — the presets exist so a reviewer can
+        the last time they had this trade-off in front of them, the presets exist so a reviewer can
         watch the same cancellation resolve differently.
       </p>
       <div class="toggle-group" role="group" aria-label="Ranking objective">

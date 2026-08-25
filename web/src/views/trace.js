@@ -182,7 +182,7 @@ export function traceMarkup(planning) {
       The cancellation produced <strong>${planning.tasks.length}</strong> recovery tasks across
       <strong>${planning.agents.length}</strong> specialized agents, returning
       <strong>${planning.options.length}</strong> options. Downstream tasks are re-created for each
-      candidate flight, because a different arrival breaks different things — one card per booking is
+      candidate flight, because a different arrival breaks different things, one card per booking is
       shown here.
     </p>
     <div class="trace-grid">

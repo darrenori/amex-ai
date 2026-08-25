@@ -278,4 +278,7 @@ def test_lowercase_deployment_key_selects_openai_with_the_api_model_default():
 
     assert selected["provider"] == "openai"
     assert selected["api_key"] == "vercel-secret"
-    assert selected["model"] == "gpt-5.6"
+    # Pinning the exact model here only re-states the constant. What matters is
+    # that the lowercase deployment key is honoured and a default is supplied.
+    assert selected["model"] == ai.DEFAULT_OPENAI_MODEL
+    assert selected["model"]

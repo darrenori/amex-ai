@@ -44,11 +44,11 @@ const STEP_LABEL = {
 };
 
 const RUN_LABEL = {
-  approved: 'Approved — nothing committed yet',
+  approved: 'Approved, nothing committed yet',
   executing: 'Executing',
   complete: 'Recovery complete',
   cancelling: 'Cancelling',
-  cancelled: 'Stopped — committed steps left in place',
+  cancelled: 'Stopped, committed steps left in place',
   rolled_back: 'Rolled back',
   failed: 'Failed',
 };
@@ -128,7 +128,7 @@ export function runMarkup(run, currency, optionsById = {}) {
           <button class="btn btn-primary" type="button" id="advanceRun">
             ${awaiting
               ? `Authorise ${escapeHtml(money(Math.abs(next.amount), currency))} and commit`
-              : `Run next step${next ? ` — ${escapeHtml(next.title)}` : ''}`}
+              : `Run next step${next ? `, ${escapeHtml(next.title)}` : ''}`}
           </button>
           <button class="btn btn-quiet" type="button" id="stopRun">${icons.stop} Stop here</button>
           <button class="btn btn-quiet" type="button" id="undoRun">${icons.undo} Undo everything</button>`}

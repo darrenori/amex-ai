@@ -75,7 +75,7 @@ export function renderRecovery(container, { profiles, currency, onBack, announce
       <h2>One cancellation, priced against the whole journey.</h2>
       <p>
         Every booking is on one Card, so we can rebuild the itinerary and price what the
-        cancellation really costs — not just the new fare.
+        cancellation really costs, not just the new fare.
       </p>
     </div>
 
@@ -276,7 +276,7 @@ export function renderRecovery(container, { profiles, currency, onBack, announce
       <div class="section-head">
         <h3><span class="section-index">3.</span> Candidate recovery plans</h3>
         <p>
-          Each card is a complete plan, built end to end for one goal — not a mix-and-match of
+          Each card is a complete plan, built end to end for one goal, not a mix-and-match of
           separate best picks.
         </p>
       </div>
@@ -292,7 +292,7 @@ export function renderRecovery(container, { profiles, currency, onBack, announce
       </div>
 
       <div class="card">
-        <p class="inspect-divider">Behind the scenes — tasks, agents and what they ruled out</p>
+        <p class="inspect-divider">Behind the scenes, tasks, agents and what they ruled out</p>
         ${traceMarkup(state.planning)}
       </div>`;
 
@@ -338,7 +338,7 @@ export function renderRecovery(container, { profiles, currency, onBack, announce
       <div class="section-head">
         <h3><span class="section-index">4.</span> Adjust the plan</h3>
         <p>
-          Drag an alternative onto a booking — the browser proposes, the server decides.
+          Drag an alternative onto a booking, the browser proposes, the server decides.
         </p>
       </div>
       <div id="editorHost"></div>`;
@@ -373,7 +373,7 @@ export function renderRecovery(container, { profiles, currency, onBack, announce
         <li>Give up <strong>${escapeHtml(money(m.forfeited, currency))}</strong> of non-refundable spend${m.experience_lost ? ` and ${escapeHtml(money(m.experience_lost, currency))} of booked experience` : ''}.</li>
         <li>Expect <strong>${escapeHtml(money(m.refund_expected, currency))}</strong> back to the Card.</li>
       </ol>
-      <div class="modal-summary"><span>Arrival</span><strong>${escapeHtml(m.arrival ? m.arrival.slice(0, 16).replace('T', ' ') : '—')}</strong></div>
+      <div class="modal-summary"><span>Arrival</span><strong>${escapeHtml(m.arrival ? m.arrival.slice(0, 16).replace('T', ' ') : ', ')}</strong></div>
       <p class="subdued" style="margin-top:16px">
         Illustrative simulation. No real purchase, cancellation, refund or claim will occur.
       </p>
@@ -476,7 +476,7 @@ export function renderRecovery(container, { profiles, currency, onBack, announce
         const result = await api.cancelRun(state.run.id, false);
         state.run = result.run;
         paint();
-        announce('Recovery stopped. Steps already committed are left in place — nothing was reversed.');
+        announce('Recovery stopped. Steps already committed are left in place, nothing was reversed.');
       } catch (error) {
         announce(error.message);
       }

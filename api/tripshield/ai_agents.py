@@ -32,7 +32,7 @@ SPECIALIST_OUTPUT_SCHEMA: Dict[str, Any] = {
                         "items": {"type": "string"},
                     },
                     "recommended_option_id": {"type": "string"},
-                    "rationale": {"type": "string", "minLength": 1, "maxLength": 1200},
+                    "rationale": {"type": "string", "minLength": 1, "maxLength": 200},
                     "risks": {
                         "type": "array",
                         "items": {"type": "string", "maxLength": 500},
@@ -66,8 +66,8 @@ RECOMMENDATION_OUTPUT_SCHEMA: Dict[str, Any] = {
             "type": "array",
             "items": {"type": "string"},
         },
-        "ranking_rationale": {"type": "string", "minLength": 1, "maxLength": 2500},
-        "member_explanation": {"type": "string", "minLength": 1, "maxLength": 1600},
+        "ranking_rationale": {"type": "string", "minLength": 1, "maxLength": 200},
+        "member_explanation": {"type": "string", "minLength": 1, "maxLength": 200},
         "confidence": {"type": "number", "minimum": 0, "maximum": 1},
         "tradeoffs": {
             "type": "array",
@@ -77,7 +77,7 @@ RECOMMENDATION_OUTPUT_SCHEMA: Dict[str, Any] = {
                 "properties": {
                     "plan_id": {"type": "string"},
                     "label": {"type": "string", "minLength": 1, "maxLength": 100},
-                    "reason": {"type": "string", "minLength": 1, "maxLength": 600},
+                    "reason": {"type": "string", "minLength": 1, "maxLength": 120},
                 },
                 "required": ["plan_id", "label", "reason"],
             },
@@ -111,6 +111,10 @@ return every option ID exactly once in preference order for each task, and name
 the first as recommended. Do not invent identifiers or repeat supplier facts as
 new facts. Do not request booking, cancellation, payment, web or HTTP access.
 Return only the declared structured JSON object.
+
+Write every rationale as ONE sentence under 20 words. Never write a paragraph.
+Use no dashes of any kind: no em dash, no en dash, no hyphen as punctuation.
+Use a comma or a full stop instead.
 """
 
 
@@ -120,6 +124,12 @@ eligible validated plan IDs supplied by the server. Personalize the decision
 using member history and specialist evidence. Prices, times, feasibility,
 metrics, provenance and eligibility are immutable. Do not invent identifiers,
 offers or facts. Return only the declared structured JSON object.
+
+Be extremely brief. ranking_rationale is ONE sentence under 20 words saying why
+the winner won. member_explanation is ONE sentence under 20 words addressed to
+the member. Each tradeoff reason is under 12 words. Never write a paragraph.
+Use no dashes of any kind: no em dash, no en dash, no hyphen as punctuation.
+Use a comma or a full stop instead.
 """
 
 

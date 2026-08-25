@@ -4,14 +4,14 @@ Each connector is the standardized interface an agent gets to one external
 capability. They are declared against real, currently-available products, and
 every tool name below maps to a real endpoint on that product:
 
-``status``      AeroDataBox — flight status, the detection trigger.
+``status``      AeroDataBox, flight status, the detection trigger.
                 GET /flights/number/{number}/{date}
                 Status vocabulary is theirs verbatim: Expected, EnRoute, CheckIn,
                 Boarding, GateClosed, Departed, Delayed, Approaching, Arrived,
                 Canceled, Diverted, CanceledUncertain, Unknown.
                 https://doc.aerodatabox.com/
 
-``flights``     Duffel — search, change and cancel air bookings. Its two-phase
+``flights``     Duffel, search, change and cancel air bookings. Its two-phase
                 cancellation (quote first, confirm second) is exactly the shape
                 compensation needs.
                 POST /air/offer_requests, POST /air/order_change_requests,
@@ -20,19 +20,19 @@ every tool name below maps to a real endpoint on that product:
                 POST /air/order_cancellations/{id}/actions/confirm
                 https://duffel.com/docs/api/order-cancellations
 
-``lodging``     LiteAPI (Nuitée) — 2M+ properties behind one REST interface, with
+``lodging``     LiteAPI (Nuitée), 2M+ properties behind one REST interface, with
                 a free sandbox that mirrors production.
                 POST /rates, POST /rates/prebook (locks the price briefly),
                 POST /rates/book, PUT /bookings/{id}/cancel
                 https://docs.liteapi.travel/reference/overview
 
-``activities``  Viator Partner API — attraction inventory, and the same
+``activities``  Viator Partner API, attraction inventory, and the same
                 quote-then-cancel split.
                 POST /availability/check, POST /bookings/book,
                 POST /bookings/cancel-quote, POST /bookings/cancel
                 https://docs.viator.com/partner-api/technical/
 
-``dining``      TableCheck — the reservation platform most Japanese restaurants
+``dining``      TableCheck, the reservation platform most Japanese restaurants
                 in this price band actually run on.
 
 ``ground``      JR East / airport transfer inventory.
@@ -185,7 +185,7 @@ FIXTURE_STATUS: Dict[str, Dict[str, Any]] = {
             "terminal": "1",
         },
         "_disruption": {
-            "reason": "Aircraft technical — inbound rotation withdrawn",
+            "reason": "Aircraft technical, inbound rotation withdrawn",
             "notified_at": "2026-09-18 06:02+08:00",
         },
     },
@@ -490,7 +490,7 @@ def _flight_inventory() -> List[InventoryItem]:
             start=sgt(18, 11, 30), end=jst(18, 19, 35),
             cost_delta=320.0, quality=0.97,
             notes=["Shortest delay available on the day.",
-                   "Star Alliance — status and lounge access carry over."],
+                   "Star Alliance, status and lounge access carry over."],
             meta={"hours_lost": 2.5, "stops": "Direct", "stops_status": "good", "cabin": "Business class"},
             **common,
             reliability_risk=0.1,
@@ -585,7 +585,7 @@ def _lodging_inventory() -> List[InventoryItem]:
             start=sgt(18, 22, 0), end=sgt(19, 6, 30),
             cost_delta=90.0, changes_booking=True, quality=0.80,
             notes=["Airside, so there is no immigration round-trip before the 08:10 departure.",
-                   "Charged to the same Card — no new payment method to set up."],
+                   "Charged to the same Card, no new payment method to set up."],
             meta={"supplementary": True},
             booking_id="bk_hotel_tokyo_supplement",
             kind=BookingKind.LODGING,
@@ -712,7 +712,7 @@ def _dining_inventory() -> List[InventoryItem]:
         ),
         InventoryItem(
             id="opt_din_cancel", offer_id="tc_cancel_88213",
-            title="Cancel — deposit is forfeited",
+            title="Cancel, deposit is forfeited",
             detail="Same-day cancellation, no refund of the deposit",
             supplier="TableCheck",
             start=jst(18, 20, 0), end=jst(18, 20, 0),
@@ -756,7 +756,7 @@ def _ground_inventory() -> List[InventoryItem]:
             supplier="JR East",
             start=jst(18, 23, 0), end=jst(19, 0, 5),
             cost_delta=8.0, changes_booking=True, quality=0.82,
-            notes=["Last departure — a further slip means a road transfer."],
+            notes=["Last departure, a further slip means a road transfer."],
             **common,
             reliability_risk=0.16,
             links=[{"label": "View Amex Travel car hire", "url": "https://www.americanexpress.com/en-sg/travel/cars/"}],
@@ -768,7 +768,7 @@ def _ground_inventory() -> List[InventoryItem]:
             supplier="Airport transfer desk",
             start=jst(18, 22, 40), end=jst(18, 23, 55),
             cost_delta=75.0, changes_booking=True, quality=0.95,
-            notes=["Immune to the rail timetable — the reason it is worth 75 on a late arrival."],
+            notes=["Immune to the rail timetable, the reason it is worth 75 on a late arrival."],
             **common,
             reliability_risk=0.04,
             links=[{"label": "View Amex Travel car hire", "url": "https://www.americanexpress.com/en-sg/travel/cars/"}],
@@ -894,7 +894,7 @@ def _lodging_osaka_inventory() -> List[InventoryItem]:
             id="opt_lod_osa_station", offer_id="rate_new_OSA_STATION",
             title="Move to a hotel inside Osaka Station",
             detail="Same concourse as the arrival platform, so a late landing still makes check-in",
-            supplier="Amex Travel — Osaka Station properties",
+            supplier="Amex Travel, Osaka Station properties",
             start=jst(21, 21, 0), end=jst(23, 11, 0),
             cost_delta=64.0, changes_booking=True, quality=0.83,
             notes=["Charged to the same Card, so no new payment method is needed."],
@@ -944,6 +944,86 @@ TOOL_LABELS: Dict[str, str] = {
 def tool_label(tool: str) -> str:
     """Plain-English name for a connector tool, falling back to its key."""
     return TOOL_LABELS.get(tool, tool.replace("_", " ").strip().capitalize())
+
+
+# ---------------------------------------------------------------------------
+# Per-option links
+# ---------------------------------------------------------------------------
+#
+# A recommendation the member cannot act on is only half an answer. The links
+# used to be written by hand per fixture and said things like "Explore Amex
+# hotels in Tokyo" against every option in the plan, which is the same sentence
+# whichever booking the AI picked.
+#
+# These are built from the option itself, so the label names the supplier and
+# the date the member is actually being sent to book, and live inventory gets
+# the same treatment as a fixture without anyone editing a list.
+#
+# The destinations are Amex's own programme and search pages, the ones already
+# reviewed in amex_partners.py. No property-specific URL is invented here: that
+# module requires a human to verify a record before a supplier gets a link of
+# its own, and a plausible-looking guess is worse than an honest search page.
+
+_AMEX = "https://www.americanexpress.com"
+_CITY_PROPERTIES = {
+    "TYO": f"{_AMEX}/en-sg/travel/discover/property-results/c/27/dt/4/d/Tokyo%2CJapan",
+    "OSA": f"{_AMEX}/en-sg/travel/discover/property-results/c/27/dt/4/d/Osaka%2CJapan",
+    "SIN": f"{_AMEX}/en-sg/travel/discover/property-results/c/27/dt/4/d/Singapore",
+}
+_AMEX_HOTELS = f"{_AMEX}/en-sg/travel/hotels/"
+_AMEX_FLIGHTS = f"{_AMEX}/en-sg/travel/flights/"
+_AMEX_CARS = f"{_AMEX}/en-sg/travel/cars/"
+_LOVE_DINING = f"{_AMEX}/sg/benefits/love-dining/love-dining-restaurants.html"
+_MONTHS = ("Jan", "Feb", "Mar", "Apr", "May", "Jun",
+           "Jul", "Aug", "Sep", "Oct", "Nov", "Dec")
+
+
+def _when(value: Any) -> str:
+    """`18 Sep`, so the label says which date it is sending the member to."""
+    try:
+        return f"{value.day} {_MONTHS[value.month - 1]}"
+    except Exception:
+        return ""
+
+
+def option_links(item: Any) -> List[Dict[str, str]]:
+    """One specific, actionable link for this option."""
+    kind = getattr(item, "kind", None)
+    supplier = str(getattr(item, "supplier", "") or "").strip()
+    place = str(getattr(item, "place_code", "") or "").strip().upper()[:3]
+    when = _when(getattr(item, "start", None))
+
+    # An option that drops a booking is a refund, not something to go and book.
+    if getattr(item, "drops_booking", False):
+        return []
+
+    if kind is BookingKind.LODGING:
+        url = _CITY_PROPERTIES.get(place, _AMEX_HOTELS)
+        label = f"Book {supplier}" if supplier else "Find a hotel"
+        if when:
+            label = f"{label}, {when}"
+    elif kind is BookingKind.FLIGHT:
+        url = _AMEX_FLIGHTS
+        number = str((getattr(item, "meta", None) or {}).get("flight_number", "")).strip()
+        subject = number or supplier or "this flight"
+        label = f"Book {subject}" + (f", {when}" if when else "")
+    elif kind is BookingKind.DINING:
+        url = _LOVE_DINING
+        label = f"Book {supplier}" if supplier else "Find a restaurant"
+        if when:
+            label = f"{label}, {when}"
+    elif kind is BookingKind.GROUND:
+        url = _AMEX_CARS
+        label = f"Arrange {supplier}" if supplier else "Arrange transfer"
+    elif kind is BookingKind.ACTIVITY:
+        url = _AMEX_HOTELS
+        label = f"Book {supplier}" if supplier else "Book this experience"
+        if when:
+            label = f"{label}, {when}"
+    else:
+        return []
+
+    return [{"label": label[:60], "url": url}]
 
 
 INVENTORY: List[InventoryItem] = (
@@ -1399,7 +1479,7 @@ def execute(item: InventoryItem, *, idempotency_key: str) -> Dict[str, Any]:
 
 
 def cancellation_quote(item: InventoryItem, receipt: Dict[str, Any]) -> Dict[str, Any]:
-    """Phase one of compensation — ask, do not assume.
+    """Phase one of compensation, ask, do not assume.
 
     Duffel, LiteAPI and Viator all make you take a quote before you cancel, and
     all three can tell you the refund is less than you paid. That is exactly why
@@ -1461,7 +1541,7 @@ def cancellation_quote(item: InventoryItem, receipt: Dict[str, Any]) -> Dict[str
 
 
 def confirm_cancellation(item: InventoryItem, quote: Dict[str, Any]) -> Dict[str, Any]:
-    """Phase two — Duffel's ``POST /air/order_cancellations/{id}/actions/confirm``
+    """Phase two, Duffel's ``POST /air/order_cancellations/{id}/actions/confirm``
     and its equivalents on the other connectors."""
     spec = SPECS[connector_for(item.kind)]
     return {

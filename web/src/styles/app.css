@@ -424,11 +424,13 @@
   letter-spacing: -0.01em;
 }
 
+/* Dotted, the way a route is drawn on a boarding pass or a flight map: it
+   reads as a journey between two places rather than a rule between two words. */
 .route-line {
   position: relative;
   width: 64px;
-  height: 1px;
-  background: var(--border);
+  height: 0;
+  border-top: 2px dotted var(--border);
 }
 
 .route-line::after {

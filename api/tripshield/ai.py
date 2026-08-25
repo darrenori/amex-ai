@@ -30,10 +30,11 @@ except (ImportError, ModuleNotFoundError):  # pragma: no cover - environment dep
 
 
 DEFAULT_ANTHROPIC_MODEL = "claude-sonnet-5"
-# The API quickstart currently uses this Responses API model. Keep the model
-# configurable, but choose a documented API model rather than an internal
-# serving-tier name as the deploy-safe default.
-DEFAULT_OPENAI_MODEL = "gpt-5.6"
+# The agents rank options against fixed constraints and write one short line of
+# rationale. That is small, bounded work, so the default is the cheap tier
+# rather than the flagship; measured at roughly a second per call against
+# gpt-5.6's several. Override with OPENAI_MODEL when a run needs more.
+DEFAULT_OPENAI_MODEL = "gpt-5.4-mini"
 # A bounded agent reads three tools and answers, which measures 10-23 seconds
 # against a current model — so an eight-second default silently timed out every
 # agent on any deployment that forgot to set AI_TIMEOUT_SECONDS. The default has
@@ -50,6 +51,9 @@ MAX_MODEL_ROUNDS = 3
 # tasks, so the floor below is what the smallest agent needs and callers scale it
 # by the work they are actually asking for (see `output_budget`).
 MAX_OUTPUT_TOKENS = 900
+
+# How many extra attempts an agent gets when its answer fails validation.
+VALIDATION_RETRIES = 1
 
 
 def output_budget(items: int, *, per_item: int = 220) -> int:
@@ -687,13 +691,26 @@ async def run_structured_agent(
             )
 
     try:
-        raw, used = await asyncio.wait_for(run(), timeout=deadline)
-        try:
-            validated = output_validator(raw) if output_validator else raw
-        except (KeyError, TypeError, ValueError) as exc:
-            raise _AIFlowError("invalid_model_output") from exc
-        if not isinstance(validated, Mapping):
-            raise _AIFlowError("invalid_model_output")
+        # The validators are exacting on purpose: a specialist must return every
+        # option id exactly once, in order, for every task it was given. Models
+        # slip on that occasionally, and the slip is not deterministic, so one
+        # retry converts most of them into an answer. It costs a second call
+        # only when the first was going to be thrown away regardless, and the
+        # deterministic fallback still catches whatever fails twice.
+        attempts = 1 + VALIDATION_RETRIES
+        for attempt in range(attempts):
+            raw, used = await asyncio.wait_for(run(), timeout=deadline)
+            try:
+                validated = output_validator(raw) if output_validator else raw
+            except (KeyError, TypeError, ValueError) as exc:
+                if attempt + 1 < attempts:
+                    continue
+                raise _AIFlowError("invalid_model_output") from exc
+            if not isinstance(validated, Mapping):
+                if attempt + 1 < attempts:
+                    continue
+                raise _AIFlowError("invalid_model_output")
+            break
         result.update(
             status="generated",
             tools_used=used,

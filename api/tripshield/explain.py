@@ -4,7 +4,7 @@ Two obligations that come with letting software re-arrange somebody's trip.
 
 **Reason codes** are a stable, machine-readable vocabulary for *why* a plan was
 recommended. Prose explanations are for the member; these are for everything
-else — support agents reading a case months later, a regulator asking how the
+else, support agents reading a case months later, a regulator asking how the
 system decides, a regression test asserting the reasoning did not silently
 change. They are derived from the plan's own metrics rather than written by the
 thing making the recommendation, so they cannot drift away from the numbers.
@@ -41,7 +41,7 @@ HIGH_TIME_VALUE = 0.75
 def reason_codes(plan: RecoveryPlan, weights: Weights, profile: Optional[Dict[str, Any]] = None) -> List[str]:
     """Why this plan looks the way it does, as stable codes.
 
-    Read off the metrics, never off the recommendation — a code must be true of
+    Read off the metrics, never off the recommendation, a code must be true of
     the plan whether or not the plan won.
     """
     m = plan.metrics

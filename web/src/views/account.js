@@ -115,7 +115,7 @@ export function renderAccount(container, { data, onCheckFlights, announce }) {
     <section class="card" aria-labelledby="tripHeading">
       <div class="card-head">
         <div>
-          <p class="eyebrow" id="tripHeading">Upcoming trip · ${escapeHtml(trip.dates.split('–')[0])} September</p>
+          <p class="eyebrow" id="tripHeading">Upcoming trip · ${escapeHtml(trip.dates.split(', ')[0])} September</p>
           <div class="route" style="margin-top:8px">
             <span class="route-code">${escapeHtml(trip.origin.code)}</span>
             <span class="route-line" aria-hidden="true"></span>
@@ -164,7 +164,7 @@ export function renderAccount(container, { data, onCheckFlights, announce }) {
           <span class="icon-badge" aria-hidden="true">${icons.shield}</span>
         </div>
         <p class="muted" style="margin-top:12px;font-size:var(--text-sm)">
-          All ${trip.bookings.length} bookings are on ${escapeHtml(member.card_label)} — that's what lets
+          All ${trip.bookings.length} bookings are on ${escapeHtml(member.card_label)}, that's what lets
           TripShield map the dependencies and price a disruption against the whole journey, not one booking.
         </p>
         <div class="disruption-cta" style="margin-top:24px">
