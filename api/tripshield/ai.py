@@ -34,7 +34,12 @@ DEFAULT_ANTHROPIC_MODEL = "claude-sonnet-5"
 # configurable, but choose a documented API model rather than an internal
 # serving-tier name as the deploy-safe default.
 DEFAULT_OPENAI_MODEL = "gpt-5.6"
-DEFAULT_TIMEOUT_SECONDS = 8.0
+# A bounded agent reads three tools and answers, which measures 10-23 seconds
+# against a current model — so an eight-second default silently timed out every
+# agent on any deployment that forgot to set AI_TIMEOUT_SECONDS. The default has
+# to be a value the work actually fits inside; lower it deliberately, not by
+# omission. Agents run concurrently, so this is roughly the wall clock too.
+DEFAULT_TIMEOUT_SECONDS = 45.0
 # Each agent reads its three tools in one round and answers in the next, so the
 # ceiling only needs to cover a retry, not five.
 MAX_MODEL_ROUNDS = 3
