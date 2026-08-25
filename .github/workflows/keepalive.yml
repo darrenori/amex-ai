@@ -1,0 +1,60 @@
+# Keep the Render backend warm.
+#
+# The free instance sleeps after ~15 minutes without traffic, and waking it
+# costs roughly 50 seconds — long enough that the first plan request of a demo
+# times out before the agents ever start. A cheap request every 10 minutes keeps
+# it resident.
+#
+# `/api/health` is deliberate: it touches no connector, calls no model and
+# returns a few bytes, so this costs nothing but the instance hours it is
+# protecting. Note that a free web service is metered at 750 hours a month and
+# staying awake all month spends about 744 of them — fine for this one service,
+# but narrow the cron window below if another free service needs the headroom.
+#
+# GitHub's scheduled runners are best-effort and often drift several minutes
+# under load, hence 10 rather than 14. Scheduled workflows are also disabled
+# automatically after 60 days without repository activity; re-enable from the
+# Actions tab if that happens.
+
+name: Keep-alive
+
+on:
+  schedule:
+    - cron: "*/10 * * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: keepalive
+  cancel-in-progress: true
+
+jobs:
+  ping:
+    name: Ping the API
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    steps:
+      - name: Wake the Render service
+        env:
+          # Override with a repository variable if the hostname ever changes.
+          API_URL: ${{ vars.KEEPALIVE_URL || 'https://tripshield-api.onrender.com/api/health' }}
+        run: |
+          # A sleeping instance needs time to boot, so allow a slow first byte
+          # and retry rather than reporting a cold start as an outage.
+          for attempt in 1 2 3; do
+            code=$(curl -sS -o /tmp/body.txt -w '%{http_code}' \
+                        --max-time 90 --retry 0 "$API_URL" || echo 000)
+            echo "attempt $attempt -> HTTP $code"
+            if [ "$code" = "200" ]; then
+              echo "awake: $(cat /tmp/body.txt)"
+              exit 0
+            fi
+            sleep 15
+          done
+          echo "::warning::No 200 from $API_URL after 3 attempts (last: $code)"
+          # A failed ping is not a broken build. The next run tries again, and
+          # a red X every ten minutes would train everyone to ignore CI.
+          exit 0
