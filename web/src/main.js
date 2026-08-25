@@ -11,6 +11,7 @@ import './styles/islands.css';
 import './styles/home.css';
 
 import { api } from './api.js';
+import { maybeOpenTutorial, openTutorial } from './views/tutorial.js';
 import { escapeHtml } from './format.js';
 import { closeModal } from './components/modal.js';
 import { renderAccount } from './views/account.js';
@@ -35,6 +36,7 @@ const dom = {
   spinner: document.querySelector('#loginButton .spinner'),
   togglePassword: document.getElementById('togglePassword'),
   restartButton: document.getElementById('restartButton'),
+  tourButton: document.getElementById('tourButton'),
   memberChip: document.getElementById('memberChip'),
   main: document.getElementById('main'),
   accountView: document.getElementById('accountView'),
@@ -232,7 +234,11 @@ function enterApp() {
   window.scrollTo({ top: 0, behavior: 'auto' });
   window.setTimeout(() => dom.main.focus(), reducedMotion.matches ? 20 : 240);
   announce(`You are now signed in. Welcome back, ${session.account.member.first_name}.`);
+  // First visit only: explain the shape of the solution before stage 1.
+  maybeOpenTutorial();
 }
+
+dom.tourButton?.addEventListener('click', (event) => openTutorial(event.currentTarget));
 
 dom.restartButton.addEventListener('click', () => {
   if (session.stopRecovery) {

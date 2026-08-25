@@ -7,7 +7,7 @@
 // blue → green as the run commits its steps. A text summary carries the same
 // state for screen readers.
 
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
 import { geoMercator, geoPath } from 'd3-geo';
 import { feature } from 'topojson-client';
 import { scaleLinear } from 'd3-scale';
@@ -31,6 +31,26 @@ const countries = feature(topo, topo.objects.countries);
 const projection = geoMercator().center([122, 20]).scale(560).translate([WIDTH / 2, HEIGHT / 2]);
 const path = geoPath(projection);
 
+/** A flight leg, bowed the way a route is drawn on an airline map.
+ *
+ *  Two projected points and a control point pushed perpendicular to the line
+ *  between them, so the arc leans away from the equator instead of running
+ *  dead straight through the sea. */
+function legArc(from, to) {
+  const [x1, y1] = projection(from) ?? [0, 0];
+  const [x2, y2] = projection(to) ?? [0, 0];
+  const mx = (x1 + x2) / 2;
+  const my = (y1 + y2) / 2;
+  const dx = x2 - x1;
+  const dy = y2 - y1;
+  const span = Math.hypot(dx, dy) || 1;
+  // Perpendicular, scaled by distance: short hops stay nearly flat.
+  const bow = Math.min(span * 0.22, 90);
+  const cx = mx + (dy / span) * bow;
+  const cy = my - (dx / span) * bow;
+  return { d: `M ${x1} ${y1} Q ${cx} ${cy} ${x2} ${y2}`, mid: [cx, cy] };
+}
+
 export default function ResolveChoropleth({ regions = [], progress = 0 }) {
   const countryValue = useMemo(() => {
     const val = (ids) => {
@@ -40,6 +60,22 @@ export default function ResolveChoropleth({ regions = [], progress = 0 }) {
       return legs.reduce((s, r) => s + (score[r.status] ?? 0), 0) / legs.length;
     };
     return { [SINGAPORE]: val(['sg']), [JAPAN]: val(['tokyo', 'osaka']) };
+  }, [regions]);
+
+  const [hovered, setHovered] = useState(null);
+
+  // One leg per consecutive pair, so the map shows the journey and not just
+  // three unrelated dots. A leg takes the status of the place it arrives at:
+  // the flight into Tokyo is only as resolved as Tokyo is.
+  const legs = useMemo(() => {
+    const out = [];
+    for (let i = 0; i < regions.length - 1; i += 1) {
+      const from = regions[i];
+      const to = regions[i + 1];
+      if (!from?.coordinates || !to?.coordinates) continue;
+      out.push({ id: `${from.id}-${to.id}`, from, to, ...legArc(from.coordinates, to.coordinates) });
+    }
+    return out;
   }, [regions]);
 
   return (
@@ -62,17 +98,46 @@ export default function ResolveChoropleth({ regions = [], progress = 0 }) {
             );
           })}
         </g>
+        {legs.map((leg) => {
+          const tone = STATUS[leg.to.status] ?? STATUS.at_risk;
+          const on = hovered === leg.id || hovered === leg.from.id || hovered === leg.to.id;
+          return (
+            <g key={leg.id} className={`choro-leg${on ? ' is-on' : ''}`}
+               onMouseEnter={() => setHovered(leg.id)}
+               onMouseLeave={() => setHovered(null)}>
+              <title>{`${leg.from.name} to ${leg.to.name}: ${(STATUS[leg.to.status] ?? STATUS.at_risk).label}`}</title>
+              {/* A fat transparent copy, so the thin dotted line is still easy to hover. */}
+              <path d={leg.d} fill="none" stroke="transparent" strokeWidth={16} />
+              <path className="choro-leg-line" d={leg.d} fill="none"
+                    stroke={tone.color} strokeWidth={on ? 2.6 : 1.8}
+                    strokeDasharray="2 7" strokeLinecap="round" />
+            </g>
+          );
+        })}
+
         {regions.map((r) => {
           const tone = STATUS[r.status] ?? STATUS.at_risk;
           const [x, y] = projection(r.coordinates) ?? [0, 0];
+          const on = hovered === r.id || (hovered ?? '').includes(r.id);
           return (
-            <g key={r.id} transform={`translate(${x} ${y})`}>
-              <circle r={9} fill={tone.color} fillOpacity={0.18} />
+            <g key={r.id}
+               className={`choro-stop${on ? ' is-on' : ''}${r.status === 'resolving' ? ' is-resolving' : ''}`}
+               transform={`translate(${x} ${y})`}
+               onMouseEnter={() => setHovered(r.id)}
+               onMouseLeave={() => setHovered(null)}>
+              <title>{`${r.name}: ${tone.label}`}</title>
+              <circle className="choro-halo" r={9} fill={tone.color} fillOpacity={0.18} />
               <circle r={4.5} fill={tone.color} stroke="var(--canvas)" strokeWidth={1.5} />
               <text textAnchor="middle" y={-13} style={{
                 fontFamily: 'var(--font-sans)', fontSize: 13, fontWeight: 600,
                 fill: 'var(--ink)', paintOrder: 'stroke', stroke: 'var(--canvas)', strokeWidth: 3,
               }}>{r.name}</text>
+              {on ? (
+                <text textAnchor="middle" y={24} style={{
+                  fontFamily: 'var(--font-sans)', fontSize: 11, fontWeight: 600,
+                  fill: tone.color, paintOrder: 'stroke', stroke: 'var(--canvas)', strokeWidth: 3,
+                }}>{tone.label}</text>
+              ) : null}
             </g>
           );
         })}

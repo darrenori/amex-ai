@@ -373,7 +373,7 @@ export function renderRecovery(container, { profiles, currency, onBack, announce
         <li>Give up <strong>${escapeHtml(money(m.forfeited, currency))}</strong> of non-refundable spend${m.experience_lost ? ` and ${escapeHtml(money(m.experience_lost, currency))} of booked experience` : ''}.</li>
         <li>Expect <strong>${escapeHtml(money(m.refund_expected, currency))}</strong> back to the Card.</li>
       </ol>
-      <div class="modal-summary"><span>Arrival</span><strong>${escapeHtml(m.arrival ? m.arrival.slice(0, 16).replace('T', ' ') : ', ')}</strong></div>
+      <div class="modal-summary"><span>Arrival</span><strong>${escapeHtml(m.arrival ? m.arrival.slice(0, 16).replace('T', ' ') : 'not set')}</strong></div>
       <p class="subdued" style="margin-top:16px">
         Illustrative simulation. No real purchase, cancellation, refund or claim will occur.
       </p>

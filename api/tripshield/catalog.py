@@ -7,8 +7,8 @@ supplier separately. That one fact is what makes the dependency graph buildable.
 Grounding
 ---------
 Carriers, routes, properties and attractions are real and really do connect the
-way they are modelled here (SQ flies SIN, NRT; the Narita Express runs NRT into
-Tokyo; Jetstar Japan flies NRT, KIX; Hilton Tokyo Bay is the Maihama resort hotel
+way they are modelled here (SQ flies SIN to NRT; the Narita Express runs NRT into
+Tokyo; Jetstar Japan flies NRT to KIX; Hilton Tokyo Bay is the Maihama resort hotel
 beside Tokyo Disney Resort; Hotel Granvia Osaka sits inside Osaka Station).
 
 Flight numbers, prices, seat availability, references and the member are
@@ -342,8 +342,10 @@ def build_dependencies() -> List[Dependency]:
 
 
 TRIP_META = {
-    "id": "TRP-2026-0918-SIN-NRT-KIX",
-    "dates": "18, 23 September 2026",
+    "id": f"TRP-{TRIP_YEAR}-{TRIP_MONTH:02d}18-SIN-NRT-KIX",
+    # A range, not a list. The dash sweep turned "18-23" into "18, 23", which
+    # reads as two separate days rather than a stay.
+    "dates": f"18 to 23 {date(TRIP_YEAR, TRIP_MONTH, 18):%B} {TRIP_YEAR}",
     "origin": {"code": "SIN", "city": "Singapore", "airport": "Singapore Changi"},
     "destination": {"code": "NRT", "city": "Tokyo", "airport": "Tokyo Narita"},
     "onward": {"code": "KIX", "city": "Osaka", "airport": "Kansai International"},

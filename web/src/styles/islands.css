@@ -159,3 +159,58 @@
 /* ---------- Area chart ---------- */
 
 .recharts-cartesian-axis-tick text { font-family: var(--font-sans); }
+
+/* ---------- Journey map: legs and stops ---------- */
+
+/* The route between two places, drawn dotted and travelling slowly toward the
+   destination. The motion is the point: a leg that is still resolving reads as
+   in-flight rather than as a static line. */
+.choro-leg { cursor: pointer; }
+
+.choro-leg-line {
+  animation: choro-fly 2.4s linear infinite;
+  transition: stroke-width var(--duration-fast) var(--easing);
+}
+
+.choro-leg.is-on .choro-leg-line {
+  animation-duration: 1.1s;
+  filter: drop-shadow(0 1px 3px rgba(0, 23, 90, 0.28));
+}
+
+@keyframes choro-fly {
+  to { stroke-dashoffset: -18; }
+}
+
+.choro-stop { cursor: pointer; }
+
+.choro-halo {
+  /* An SVG shape's transform box is the whole viewport by default, so
+     `transform-origin: center` scales it about the middle of the map rather
+     than about the marker. fill-box makes the origin the shape itself. */
+  transform-box: fill-box;
+  transform-origin: center;
+  transition: transform var(--duration-base) var(--easing),
+              fill-opacity var(--duration-base) var(--easing);
+}
+
+.choro-stop.is-on .choro-halo {
+  transform: scale(1.9);
+  fill-opacity: 0.3;
+}
+
+/* A stop that is mid-recovery keeps a slow pulse, so the eye finds the place
+   the run is actually working on without reading the legend. */
+.choro-stop.is-resolving .choro-halo {
+  animation: choro-pulse 2s var(--easing) infinite;
+}
+
+@keyframes choro-pulse {
+  0%, 100% { transform: scale(1); fill-opacity: 0.18; }
+  50%      { transform: scale(1.6); fill-opacity: 0.32; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .choro-leg-line,
+  .choro-stop.is-resolving .choro-halo { animation: none; }
+  .choro-halo { transition: none; }
+}
