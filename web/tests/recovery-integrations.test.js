@@ -19,9 +19,12 @@ test('service links stay on approved Amex HTTPS destinations and open safely', (
     },
   };
 
+  // The booking application, not the page describing it. Note the host: it is
+  // americanexpress.com.sg, which is not a subdomain of americanexpress.com and
+  // so has to be allowlisted in its own right.
   assert.equal(
     optionServiceLink(flight).url,
-    'https://www.americanexpress.com/en-sg/travel/flights/',
+    'https://travel.americanexpress.com.sg/shopping/',
   );
   assert.equal(
     optionServiceLink(hotel).url,
@@ -49,10 +52,13 @@ test('unapproved or unrelated supplier destinations never become option links', 
     }],
   };
 
+  // The attacker-controlled partner URL is discarded and the safe default is
+  // used instead. That substitution is the assertion that matters here.
   assert.equal(
     optionServiceLink(unsafeHotel).url,
-    'https://www.americanexpress.com/en-sg/travel/hotels/',
+    'https://travel.americanexpress.com.sg/shopping/',
   );
+  assert.doesNotMatch(optionServiceLink(unsafeHotel).url, /evil\.example/);
   assert.equal(optionServiceLink(activityWithUnrelatedHotelLink), null);
   assert.equal(optionServiceLinkMarkup(activityWithUnrelatedHotelLink), 'Move the park passport');
 });
