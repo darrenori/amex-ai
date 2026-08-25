@@ -1,6 +1,5 @@
-// Application bootstrap: login, view switching, and the two top-level views —
-// the calm account overview, and the recovery console that takes over when a
-// trip breaks.
+// Application bootstrap: view switching and the two top-level views, the calm
+// account overview and the recovery console that takes over when a trip breaks.
 
 import './styles/fonts.css';
 import './styles/tokens.css';
@@ -23,18 +22,7 @@ const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)');
 
 const dom = {
   homeView: document.getElementById('view-home'),
-  loginView: document.getElementById('view-login'),
   appView: document.getElementById('view-app'),
-  form: document.getElementById('loginForm'),
-  email: document.getElementById('email'),
-  password: document.getElementById('password'),
-  emailError: document.getElementById('emailError'),
-  passwordError: document.getElementById('passwordError'),
-  formStatus: document.getElementById('formStatus'),
-  loginButton: document.getElementById('loginButton'),
-  loginButtonText: document.getElementById('loginButtonText'),
-  spinner: document.querySelector('#loginButton .spinner'),
-  togglePassword: document.getElementById('togglePassword'),
   restartButton: document.getElementById('restartButton'),
   tourButton: document.getElementById('tourButton'),
   memberChip: document.getElementById('memberChip'),
@@ -57,11 +45,6 @@ const announce = (message) => {
   }, 10);
 };
 
-function showFieldError(input, node, message) {
-  input.setAttribute('aria-invalid', String(Boolean(message)));
-  node.textContent = message ?? '';
-}
-
 function showBanner(container, message) {
   container.innerHTML = `
     <div class="alert" role="alert">
@@ -74,119 +57,56 @@ function showBanner(container, message) {
 }
 
 // ---------------------------------------------------------------------------
-// Home → Login
+// Home → app
 // ---------------------------------------------------------------------------
+//
+// There is no sign-in step. The demo has one member and published credentials,
+// so a login form asked people to type a password that was printed above the
+// box it went into, and stood between them and the thing they came to see.
+// The account is fetched on the way in instead.
 
-function showLogin() {
-  dom.homeView.classList.remove('is-active');
-  dom.loginView.classList.add('is-active');
-  window.scrollTo({ top: 0, behavior: 'auto' });
-  window.setTimeout(() => dom.email.focus(), reducedMotion.matches ? 20 : 240);
+let opening = false;
+
+async function openApp(trigger = null) {
+  if (opening) return;
+  opening = true;
+  const label = trigger?.textContent;
+  if (trigger) {
+    trigger.disabled = true;
+    trigger.textContent = 'Opening…';
+  }
+  announce('Opening your account.');
+
+  try {
+    const [account, profiles] = await Promise.all([api.account(), api.profiles()]);
+    session.account = account;
+    session.profiles = profiles.profiles;
+    enterApp();
+  } catch (error) {
+    // The backend sleeps on its free tier, so the first open of the day can
+    // fail while it wakes. Say so plainly and leave the button usable.
+    announce(error.message);
+    if (trigger) {
+      trigger.textContent = 'Try again';
+      trigger.disabled = false;
+    }
+  } finally {
+    opening = false;
+    if (trigger && trigger.textContent === 'Opening…') {
+      trigger.textContent = label;
+      trigger.disabled = false;
+    }
+  }
 }
 
 function showHome() {
   dom.appView.classList.remove('is-active');
   dom.appView.setAttribute('aria-hidden', 'true');
-  dom.loginView.classList.remove('is-active');
   dom.homeView.classList.add('is-active');
   window.scrollTo({ top: 0, behavior: 'auto' });
 }
 
-initHome(dom.homeView, { onEnter: showLogin, reducedMotion: reducedMotion.matches });
-
-// ---------------------------------------------------------------------------
-// Login
-// ---------------------------------------------------------------------------
-
-dom.togglePassword.addEventListener('click', () => {
-  const showing = dom.password.type === 'text';
-  dom.password.type = showing ? 'password' : 'text';
-  dom.togglePassword.textContent = showing ? 'Show' : 'Hide';
-  dom.togglePassword.setAttribute('aria-pressed', String(!showing));
-  dom.password.focus();
-});
-
-dom.email.addEventListener('input', () => {
-  if (dom.email.getAttribute('aria-invalid') === 'true') showFieldError(dom.email, dom.emailError, '');
-});
-
-dom.password.addEventListener('input', () => {
-  if (dom.password.getAttribute('aria-invalid') === 'true') showFieldError(dom.password, dom.passwordError, '');
-});
-
-document.getElementById('forgotLink').addEventListener('click', (event) => {
-  event.preventDefault();
-  announce('Password recovery is available in the full experience.');
-});
-
-document.getElementById('createAccount').addEventListener('click', () => {
-  announce('Account creation is available in the full experience.');
-});
-
-function validateLocally() {
-  const email = dom.email.value.trim();
-  let firstInvalid = null;
-
-  if (!email) {
-    showFieldError(dom.email, dom.emailError, 'Enter your email or User ID.');
-    firstInvalid = dom.email;
-  } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
-    showFieldError(dom.email, dom.emailError, 'Enter a valid email address.');
-    firstInvalid = dom.email;
-  } else {
-    showFieldError(dom.email, dom.emailError, '');
-  }
-
-  if (!dom.password.value) {
-    showFieldError(dom.password, dom.passwordError, 'Enter your password.');
-    firstInvalid = firstInvalid ?? dom.password;
-  } else {
-    showFieldError(dom.password, dom.passwordError, '');
-  }
-
-  if (firstInvalid) {
-    dom.formStatus.textContent = 'Please correct the highlighted fields.';
-    firstInvalid.focus();
-    return false;
-  }
-  return true;
-}
-
-function setLoading(loading) {
-  dom.loginButton.disabled = loading;
-  dom.loginButton.classList.toggle('is-loading', loading);
-  dom.spinner.hidden = !loading;
-  dom.loginButtonText.textContent = loading ? 'Signing in…' : 'Log in';
-}
-
-dom.form.addEventListener('submit', async (event) => {
-  event.preventDefault();
-  if (!validateLocally()) return;
-
-  setLoading(true);
-  dom.formStatus.textContent = 'Checking your details.';
-
-  try {
-    const [, account, profiles] = await Promise.all([
-      api.login(dom.email.value.trim(), dom.password.value),
-      api.account(),
-      api.profiles(),
-    ]);
-
-    session.account = account;
-    session.profiles = profiles.profiles;
-
-    await new Promise((resolve) => window.setTimeout(resolve, reducedMotion.matches ? 80 : 300));
-    enterApp();
-  } catch (error) {
-    showFieldError(dom.password, dom.passwordError, error.message);
-    dom.formStatus.textContent = error.message;
-    dom.password.focus();
-    dom.password.select();
-  } finally {
-    setLoading(false);
-  }
-});
+initHome(dom.homeView, { onEnter: openApp, reducedMotion: reducedMotion.matches });
 
 // ---------------------------------------------------------------------------
 // Views
@@ -217,7 +137,7 @@ function showRecovery() {
 }
 
 function enterApp() {
-  dom.loginView.classList.remove('is-active');
+  dom.homeView.classList.remove('is-active');
   dom.appView.classList.add('is-active');
   dom.appView.setAttribute('aria-hidden', 'false');
   dom.memberChip.hidden = false;
@@ -233,7 +153,7 @@ function enterApp() {
   dom.recoveryView.hidden = true;
   window.scrollTo({ top: 0, behavior: 'auto' });
   window.setTimeout(() => dom.main.focus(), reducedMotion.matches ? 20 : 240);
-  announce(`You are now signed in. Welcome back, ${session.account.member.first_name}.`);
+  announce(`Welcome back, ${session.account.member.first_name}.`);
   // First visit only: explain the shape of the solution before stage 1.
   maybeOpenTutorial();
 }
@@ -253,13 +173,6 @@ dom.restartButton.addEventListener('click', () => {
   dom.memberChip.hidden = true;
   dom.accountView.innerHTML = '';
   dom.recoveryView.innerHTML = '';
-  dom.form.reset();
-  dom.password.type = 'password';
-  dom.togglePassword.textContent = 'Show';
-  dom.togglePassword.setAttribute('aria-pressed', 'false');
-  showFieldError(dom.email, dom.emailError, '');
-  showFieldError(dom.password, dom.passwordError, '');
-  dom.formStatus.textContent = '';
   showHome();
 });
 

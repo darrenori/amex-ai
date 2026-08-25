@@ -1,11 +1,13 @@
 // The marketing landing page shown before login. The markup lives in index.html;
-// this wires the "Log in / Get started" buttons and the Motion.dev entrance.
+// this wires the entry buttons and the Motion.dev entrance.
 
 import { animate, stagger } from 'motion';
 
 export function initHome(view, { onEnter, reducedMotion }) {
   view.querySelectorAll('[data-enter-app]').forEach((btn) =>
-    btn.addEventListener('click', onEnter),
+    // Pass the button, so the handler can show progress on the control that
+    // was actually pressed rather than guessing which one it was.
+    btn.addEventListener('click', (event) => onEnter(event.currentTarget)),
   );
 
   if (reducedMotion) return () => {};
