@@ -325,12 +325,49 @@ def _validate_output(
     return value
 
 
+# Keywords OpenAI's strict mode rejects outright, or that carry no meaning for
+# it. `title` is what gives the origin away: when the MCP SDK is installed,
+# FastMCP derives each tool's schema from the Python signature and emits
+# `{"type": "object", "properties": {}, "title": "...Arguments"}` — dropping the
+# hand-written schema in mcp_server.py that does declare additionalProperties.
+_STRICT_DROP = frozenset({"title", "uniqueItems", "minItems", "maxItems", "default"})
+
+
+def _strict_schema(node: Any) -> Any:
+    """Normalise a JSON Schema for OpenAI strict mode.
+
+    Strict function calling requires every object to set
+    ``additionalProperties: false`` and to name every property in ``required``.
+    A schema that misses either is rejected with 400 invalid_function_parameters
+    before the call is costed, which failed every agent round regardless of
+    billing. Normalising at the provider adapter keeps the MCP layer free of a
+    single vendor's serialisation rules.
+    """
+    if not isinstance(node, Mapping):
+        return node
+    out: Dict[str, Any] = {k: v for k, v in node.items() if k not in _STRICT_DROP}
+    if "properties" in out or out.get("type") == "object":
+        properties = {k: _strict_schema(v) for k, v in (out.get("properties") or {}).items()}
+        out["type"] = "object"
+        out["properties"] = properties
+        out["required"] = list(properties)
+        out["additionalProperties"] = False
+    if isinstance(out.get("items"), Mapping):
+        out["items"] = _strict_schema(out["items"])
+    for key in ("anyOf", "allOf", "oneOf"):
+        if isinstance(out.get(key), list):
+            out[key] = [_strict_schema(item) for item in out[key]]
+    if isinstance(out.get("$defs"), Mapping):
+        out["$defs"] = {k: _strict_schema(v) for k, v in out["$defs"].items()}
+    return out
+
+
 def _openai_tools(tools: Sequence[Dict[str, Any]]) -> List[Dict[str, Any]]:
     return [{
         "type": "function",
         "name": tool["name"],
         "description": tool["description"],
-        "parameters": tool["input_schema"],
+        "parameters": _strict_schema(tool["input_schema"]),
         "strict": True,
     } for tool in tools]
 
@@ -372,7 +409,7 @@ async def _run_openai(
                     "type": "json_schema",
                     "name": schema_name,
                     "strict": True,
-                    "schema": dict(output_schema),
+                    "schema": _strict_schema(dict(output_schema)),
                 }
             }
         response = await _maybe_await(client.responses.create(**kwargs))
@@ -487,9 +524,23 @@ def _provider_client(provider: str, api_key: str, timeout: float) -> Any:
 
 
 def _exception_code(exc: BaseException) -> str:
+    # Agents run concurrently in a TaskGroup, so a provider failure arrives
+    # wrapped in an ExceptionGroup. Classifying the wrapper reported every
+    # failure as a generic provider_error and hid the actionable cause, so
+    # unwrap to the first real exception before deciding.
+    if isinstance(exc, BaseExceptionGroup):
+        for inner in exc.exceptions:
+            code = _exception_code(inner)
+            if code != "provider_error":
+                return code
+        return "provider_error"
     if isinstance(exc, _AIFlowError):
         return exc.code
     name = type(exc).__name__.lower()
+    # "Out of credit" and "slow down" are both 429s but need opposite responses:
+    # one wants a billing change, the other wants a retry. Keep them apart.
+    if str(getattr(exc, "code", "")) == "insufficient_quota":
+        return "insufficient_quota"
     if isinstance(exc, (asyncio.TimeoutError, TimeoutError)) or "timeout" in name:
         return "timeout"
     if "authentication" in name or "permission" in name:

@@ -522,3 +522,57 @@ def test_strict_schemas_carry_no_keywords_openai_rejects():
         ("RECOMMENDATION_OUTPUT_SCHEMA", RECOMMENDATION_OUTPUT_SCHEMA),
     ]:
         walk(schema, name)
+
+
+def test_openai_tool_schemas_are_normalised_for_strict_mode():
+    """When the MCP SDK is installed, FastMCP derives each tool's schema from
+    the Python signature and emits ``{"type": "object", "properties": {},
+    "title": "...Arguments"}`` — no ``additionalProperties``. OpenAI's strict
+    function calling rejects that with 400 invalid_function_parameters before
+    the call is costed, which failed every agent round regardless of billing.
+    The provider adapter must normalise it."""
+    from api.tripshield.ai import _openai_tools, _strict_schema
+
+    fastmcp_shape = {
+        "name": "get_recovery_tasks",
+        "description": "Read the immutable recovery tasks.",
+        "input_schema": {
+            "type": "object",
+            "properties": {},
+            "title": "get_recovery_tasksArguments",
+        },
+    }
+    [tool] = _openai_tools([fastmcp_shape])
+    assert tool["strict"] is True
+    assert tool["parameters"]["additionalProperties"] is False
+    assert "title" not in tool["parameters"]
+
+    nested = _strict_schema({
+        "type": "object",
+        "title": "drop me",
+        "properties": {
+            "outer": {
+                "type": "object",
+                "properties": {"inner": {"type": "string"}},
+            },
+            "list": {
+                "type": "array",
+                "uniqueItems": True,
+                "items": {"type": "object", "properties": {"leaf": {"type": "string"}}},
+            },
+        },
+    })
+
+    def every_object(node):
+        if isinstance(node, dict):
+            if node.get("type") == "object":
+                assert node.get("additionalProperties") is False
+                assert set(node.get("required", [])) == set(node.get("properties", {}))
+            assert "title" not in node and "uniqueItems" not in node
+            for value in node.values():
+                every_object(value)
+        elif isinstance(node, list):
+            for value in node:
+                every_object(value)
+
+    every_object(nested)

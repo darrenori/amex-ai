@@ -91,6 +91,21 @@ function taskCard(task, optionsById) {
     </article>`;
 }
 
+// Why the model stage did not run. "Safe fallback used" on its own tells a
+// reviewer nothing actionable: a missing key, an exhausted balance and a
+// malformed request need three different responses.
+const AI_FAILURE_REASON = {
+  missing_api_key: 'No API key is configured, so the deterministic specialist ran instead.',
+  insufficient_quota: 'The AI account is out of credit, so the deterministic specialist ran instead.',
+  rate_limit: 'The provider was rate-limiting, so the deterministic specialist ran instead.',
+  authentication: 'The API key was rejected, so the deterministic specialist ran instead.',
+  timeout: 'The model did not answer in time, so the deterministic specialist ran instead.',
+  invalid_model_output: 'The model broke its output contract, so its answer was discarded.',
+  recommendation_mismatch: 'The model tried to change the winner, so its answer was discarded.',
+  provider_sdk_unavailable: 'The provider SDK is not installed, so the deterministic specialist ran instead.',
+  mcp_sdk_unavailable: 'The MCP SDK is not installed, so the deterministic specialist ran instead.',
+};
+
 function agentRunCard(run) {
   const generated = run.status === 'generated';
   const neutral = run.status === 'not_requested';
@@ -129,7 +144,9 @@ function agentRunCard(run) {
               <span class="trace-meta">${escapeHtml(finding.rationale)}</span>
             </li>`).join('')}</ul>
         </details>` : ''}
-      ${!generated && !neutral ? `<p class="trace-meta">The deterministic specialist handled this stage.</p>` : ''}
+      ${!generated && !neutral ? `<p class="trace-meta">${escapeHtml(
+        AI_FAILURE_REASON[run.error_code] ?? 'The deterministic specialist handled this stage.'
+      )}</p>` : ''}
     </article>`;
 }
 
