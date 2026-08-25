@@ -24,7 +24,10 @@ rollback path that asks each supplier what it would really give back.
 
 ## The scenario
 
-Singapore → Tokyo → Osaka, 18–23 September 2026. Seven bookings, one Card.
+Singapore → Tokyo → Osaka. Seven bookings, one Card.
+
+The itinerary is anchored to whenever you run it, always a few weeks ahead, so the
+demo cannot rot into a trip that has already happened. Dates below are illustrative.
 
 ```
                     SQ638  SIN → NRT
@@ -65,6 +68,37 @@ a number no single supplier is in a position to tell the member.
 | 9 | **Approve** | The plan is frozen into an immutable snapshot and queued. |
 | 10 | **Execute** | One transaction at a time, in dependency order, each charge authorised on its own. |
 | 11 | **Compensate** | Rollback quotes every committed step before reversing anything. |
+
+## System architecture
+
+Three processes, and one rule about which of them is allowed to decide anything.
+
+```
+  Browser                      Render (FastAPI)                 Upstreams
+  ┌────────────────┐           ┌──────────────────────┐         ┌──────────────┐
+  │ vanilla JS     │           │ index.py   routes    │  REST   │ AeroDataBox  │
+  │  + React       │  HTTPS    ├──────────────────────┤ ──────► │ Duffel       │
+  │  islands       │ ────────► │ orchestrator         │         │ LiteAPI      │
+  │                │           │  ├ graph.py          │         └──────────────┘
+  │ proposes only  │ ◄──────── │  ├ agents.py         │
+  └────────────────┘   JSON    │  ├ optimizer.py      │  in-process MCP
+        Vercel                 │  └ execution.py      │ ──────► ┌──────────────┐
+                               │ ai.py / ai_agents.py │         │ model agents │
+                               └──────────────────────┘ ◄────── └──────────────┘
+                                                          strict JSON
+```
+
+The frontend is a vanilla-JS shell with a few React "islands" mounted into it: the
+dependency graph, the journey map, the rewards chart. It renders, it proposes, and it
+decides nothing. Every hand edit goes back to the server to be revalidated.
+
+The backend is deliberately **stateful**. Sessions and execution runs live in process,
+because a run records transactions that actually happened and cannot be rebuilt from
+seed data. That is why it runs as a long-lived service rather than as serverless
+functions, and why a missing run returns `410` instead of a freshly seeded one.
+
+The model layer sits to the side of that spine, not inside it. Nothing on the critical
+path waits on a model to be correct, or available.
 
 ## Three decisions worth arguing about
 
@@ -149,6 +183,79 @@ is not a low-risk plan just because the flight is. Released bookings stay in tha
 product, because giving up a reserved transfer does not make the evening more
 reliable — it puts the member on an unmanaged fallback.
 
+## The AI layer
+
+Six bounded agents, none of which can change a fact.
+
+| Agent | Reads | Decides |
+| --- | --- | --- |
+| Flight AI | Its own tasks, validated flight inventory, member history | Preference order of already-feasible flights |
+| Accommodation AI | Same, for lodging | Preference order, and which nights are worth forfeiting |
+| Activity AI | Same, for attractions | Preference order under date rules |
+| Dining AI | Same, for reservations | Preference order under deposit rules |
+| Ground AI | Same, for transfers | Preference order under buffer rules |
+| Recommendation AI | Trip graph, validated plans, specialist findings, history | Order of **eligible** plans, and the sentence the member reads |
+
+What none of them can do is more interesting than what they can. Feasibility is settled
+before a model is asked anything: a park passport whose date has passed is not a
+judgement call, so `agents.py` rules it out deterministically and the model never sees
+it. The model orders what survived. `optimizer.py` then checks the order it returned
+against the eligible set, and discards it whole if it does not match.
+
+**Every agent is fail-closed.** If a model is unavailable, out of credit, slow, or
+returns something that breaks its contract, the deterministic specialist runs instead
+and the plan is unaffected. The trace says which happened and why, naming the actual
+cause — a missing key, an exhausted balance, a broken output contract and a truncated
+answer are four different problems and read as four different sentences.
+
+### How a model is bounded
+
+Each agent gets a **request-bound MCP snapshot** with a role-scoped, read-only tool
+allowlist. A specialist can read its own tasks, its own cached inventory, and member
+history. It cannot see another specialty's tasks, and there is no tool for booking,
+cancelling, paying, fetching a URL, or writing anything at all. The snapshot is
+immutable and dies with the request.
+
+Provider quirks are handled at the adapter boundary rather than leaking into the MCP
+layer. Two are worth knowing about, because both fail *before* a call is billed and so
+look like outages rather than bugs:
+
+- Strict structured output rejects `uniqueItems`, and strict function calling requires
+  every object to set `additionalProperties: false` and to name every property in
+  `required`. When the MCP SDK is installed, FastMCP derives tool schemas from the
+  Python signature and emits neither. Schemas are normalised in `ai.py` on the way out.
+- Agents run concurrently, so a provider error arrives wrapped in an `ExceptionGroup`.
+  Classifying the wrapper reports every failure as a generic provider error and hides
+  the cause, so it is unwrapped before it is classified.
+
+### What a run costs
+
+The snapshot is a projection, not the full record. An agent ranking options needs what
+tells two options apart, not the plumbing that books them, so adapter calls, offer ids,
+connector keys and provenance stay server-side:
+
+```
+  before   110,562 chars   ~27,600 input tokens
+  after     55,537 chars   ~13,900 input tokens
+```
+
+| Knob | Value | Why |
+| --- | --- | --- |
+| Default model | `gpt-5.4-mini` | Small bounded work; roughly a second per call against the flagship's several |
+| Tool rounds | 3 | An agent reads its tools in one round and answers in the next |
+| Output ceiling | 900 floor, scaled per agent | Eight lodging tasks cannot be enumerated in the same breath as one flight |
+| Validation retries | 1 | Model slips on exact permutations are not deterministic; one retry converts most |
+| Timeout | 45s | A bounded agent measures 10–23s; a default the work does not fit inside times out everything |
+| SDK retries | 0 | A 429 for an exhausted balance cannot succeed on retry |
+
+### Providers
+
+`AI_PROVIDER` selects OpenAI or Anthropic. OpenAI has no free tier, but its wire
+protocol is spoken by providers that do, so `OPENAI_BASE_URL` redirects the same client
+at Gemini, Groq, OpenRouter or a local Ollama with tool calling and strict structured
+output untouched. `.env.example` carries the URLs. With nothing configured at all the
+app still returns every plan, deterministically ranked.
+
 ## Connectors, MCP and AI agents
 
 TripShield has two deliberately separate integration surfaces:
@@ -156,7 +263,7 @@ TripShield has two deliberately separate integration surfaces:
 - Travel inventory and status use direct REST connector adapters. Each read reports
   `live`, `sandbox`, or `fixture` provenance and falls back to complete fixture inventory
   when credentials, availability, currency, or an upstream response are unusable.
-- Claude and GPT-5.6 use embedded, request-bound **TripShield MCP** snapshots.
+- Model agents use embedded, request-bound **TripShield MCP** snapshots.
   Each agent receives a role-specific read-only tool allowlist. Specialists can read
   their own recovery tasks, cached validated inventory and member-choice context; the
   Recommendation AI can read the graph, candidate plans, history and specialist findings.
@@ -173,8 +280,8 @@ TripShield has two deliberately separate integration surfaces:
 
 Viator documents an official [Experiences MCP](https://docs.viator.com/partner-api/mcp/),
 but access and integration are deferred. TableCheck and JR East do not provide a stable,
-self-serve booking API selected for this build. TripShield does not scrape those sites—or
-any supplier site—at runtime.
+self-serve booking API selected for this build. TripShield does not scrape those sites, or
+any supplier site, at runtime.
 
 There is no FX feed in this release, so non-SGD inventory is rejected instead of being
 converted with a guessed rate. No Amex member-account, Card transaction, entitlement,
@@ -224,9 +331,10 @@ LITEAPI_HOTEL_IDS=<set-in-environment>
 ANTHROPIC_API_KEY=<set-in-environment>
 openai_api_key=<set-in-environment>      # same secret name on Vercel and Render
 AI_PROVIDER=openai                       # optional; selects OpenAI explicitly
-ANTHROPIC_MODEL=claude-sonnet-5         # optional
-OPENAI_MODEL=gpt-5.6                     # optional
-AI_TIMEOUT_SECONDS=8                    # optional
+ANTHROPIC_MODEL=claude-sonnet-5          # optional
+OPENAI_MODEL=gpt-5.4-mini                # optional; the cheap tier is the default
+OPENAI_BASE_URL=                         # optional; any OpenAI-compatible endpoint
+AI_TIMEOUT_SECONDS=45                    # optional; a bounded agent takes 10-23s
 ```
 
 For local development, copy `.env.example` to the ignored `.env.local`, add values there,
@@ -234,7 +342,7 @@ and start the backend with `npm run dev:api:env`. Vercel values belong in the pr
 encrypted Environment Variables settings instead of any committed file.
 
 The deployed configuration uses `AI_PROVIDER=openai` and the `openai_api_key` secret
-on both Vercel and Render. The conventional `OPENAI_API_KEY` spelling remains accepted
+on Render, which is where the backend runs. The conventional `OPENAI_API_KEY` spelling remains accepted
 for local development. When `AI_PROVIDER` is unset, Anthropic is preferred when
 configured, then OpenAI. An explicitly selected provider never silently fails over to
 the other provider. Model errors or invalid output are discarded and the deterministic
@@ -311,17 +419,27 @@ api/tripshield/
   store.py                    Session state
 
 web/src/main.js               Bootstrap: login, view switching
-web/src/api.js                Typed fetch client
+web/src/api.js                Typed fetch client; defaults to the Render service
 web/src/views/
   account.js                  The calm state, before anything goes wrong
   recovery.js                 The five-stage console shell
-  detect.js                   Stage 1 — the flight sweep and the connector table
-  graph.js                    Stage 2 — the dependency graph and impact table
-  trace.js                    Stage 3 — tasks, agents, and what they ruled out
-  plans.js                    Stage 3 — candidate plans and the weighting controls
-  editor.js                   Stage 4 — drag-and-drop, revalidated server-side
-  execute.js                  Stage 5 — progress, authorisation, rollback
-web/src/styles/               tokens.css (DESIGN.md verbatim) · base · app · console
+  detect.js                   Stage 1 · the flight sweep and the connector table
+  graph.js                    Stage 2 · the dependency graph and impact table
+  trace.js                    Stage 3 · tasks, agents, and what they ruled out
+  plans.js                    Stage 3 · candidate plans and the weighting controls
+  editor.js                   Stage 4 · drag-and-drop, revalidated server-side
+  execute.js                  Stage 5 · progress, authorisation, rollback
+  partners.js                 The render-boundary link allowlist
+  tutorial.js                 The walkthrough, opened once then kept in the app bar
+web/src/islands/              React mounted into the vanilla shell
+  mount.js                    Mount and teardown, keyed by container node
+  DependencyGraph.jsx         Draggable graph; click a booking to trace its chain
+  ResolveChoropleth.jsx       Journey map; dotted legs that resolve as the run commits
+  AreaTrendChart.jsx          Rewards trend on the account overview
+web/src/styles/               tokens.css (DESIGN.md verbatim) · base · app · console · islands
+
+.github/workflows/ci.yml      Backend, frontend and the tracked-secret gate
+.github/workflows/keepalive.yml  Keeps the free backend from sleeping
 
 legacy/                       The two original standalone prototypes
 DESIGN.md                     The American Express design system this is built on
@@ -351,18 +469,39 @@ DESIGN.md                     The American Express design system this is built o
 
 ## Deployment
 
-Vercel builds `web/` to `dist/` and serves `api/index.py` as a Python serverless
-function; `vercel.json` rewrites `/api/*` onto it.
+The frontend and the backend are deployed separately, and that split is not incidental.
+
+| Piece | Host | Why there |
+| --- | --- | --- |
+| `web/` → `dist/` | Vercel (static) | A built SPA; nothing to keep warm |
+| `api/` | Render (web service) | Stateful and long-running |
+
+The backend cannot be serverless. Sessions and execution runs live in process, so a
+second instance does not have them: approving a plan would land somewhere that has never
+heard of it and return `410`, which is the honest answer but not a working product. One
+plan request also runs six agents for a good part of a minute, past a typical function
+duration limit. `store.py` says all of this at the top; production would move runs into
+Postgres and key compensation off the transaction log, and the interface is already that
+shape.
+
+A production build therefore defaults to the Render service rather than to same-origin
+`/api`, so a deployment cannot silently talk to a serverless copy of a stateful API.
+`VITE_API_BASE` overrides it for a self-hosted backend, and development still proxies to
+the local uvicorn.
 
 ```bash
-npx vercel --prod
+VITE_API_BASE=https://your-api.onrender.com/api   # optional; the default is the Render service
 ```
 
-One caveat: execution runs live in process memory. Across multiple warm serverless
-instances a run can become unreachable, and the API returns `410` rather than inventing
-one — runs record transactions that actually happened and must never be reconstructed
-from seed data. Production would put them in Postgres and key compensation off the
-transaction log; the interface in `store.py` is already that shape.
+Set on the backend: `AI_PROVIDER`, an API key, optionally `OPENAI_MODEL`,
+`OPENAI_BASE_URL` and `AI_TIMEOUT_SECONDS`. See `.env.example`; nothing is required for
+the app to work.
+
+Render's free tier sleeps after about fifteen minutes and takes roughly fifty seconds to
+wake, which is long enough that the first request of a demo times out. A scheduled
+workflow in `.github/workflows/keepalive.yml` pings `/api/health` every ten minutes to
+keep it resident. Note that a free service is metered at 750 hours a month and staying
+awake all month spends about 744 of them.
 
 ## Verification
 
@@ -402,6 +541,31 @@ Credentialed read-path smoke tests are opt-in and never book anything:
 
 Each live check skips itself when its corresponding AeroDataBox, Duffel, or LiteAPI
 credential is absent.
+
+## Outbound links
+
+A link is the one thing on the screen that can take a Card Member somewhere else
+entirely, and these arrive from the API as data. Data is not trusted because it came
+from our own backend, so the allowlist is enforced at the render boundary in
+`partners.js`, where it holds no matter which connector or agent produced the link.
+
+Two Amex hosts serve this market: the global site, and the Singapore booking application
+at `travel.americanexpress.com.sg`. The second is **not** a subdomain of the first, so it
+is named explicitly rather than assumed. Each entry matches only itself or its own
+subdomains, so `evil-americanexpress.com.sg` and `americanexpress.com.sg.attacker.io`
+are both rejected.
+
+Links are derived from the option rather than written by hand, so the label names the
+supplier and the date the member is being sent to book, and live inventory gets the same
+treatment as a fixture. They point at the booking application rather than the page
+describing it. They do not point deeper than that: a real Amex Travel result URL carries
+a search id the platform mints when a search runs against it, and that is not derivable
+from an origin, a date and a cabin.
+
+No property URL is invented. `amex_partners.py` requires a human to verify a record
+before a supplier gets a link of its own, and a test pins every shipped destination to an
+allowlist of URLs that were actually requested and answered — a plausible-looking guess
+that 404s is worse than a page one level up.
 
 ## Provenance
 
