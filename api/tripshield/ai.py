@@ -40,8 +40,21 @@ DEFAULT_TIMEOUT_SECONDS = 8.0
 MAX_MODEL_ROUNDS = 3
 
 # A ranking plus a short rationale, not an essay. Without a ceiling a reasoning
-# model is free to spend far more than the answer is worth.
+# model is free to spend far more than the answer is worth — but the ceiling has
+# to cover the answer. An agent must return every option id for every one of its
+# tasks, so the floor below is what the smallest agent needs and callers scale it
+# by the work they are actually asking for (see `output_budget`).
 MAX_OUTPUT_TOKENS = 900
+
+
+def output_budget(items: int, *, per_item: int = 220) -> int:
+    """Ceiling for an agent that must speak to `items` tasks or plans.
+
+    Eight lodging tasks cannot be enumerated in the same breath as one flight,
+    and a truncated answer is worse than an expensive one: it fails validation
+    and throws away the tokens already spent.
+    """
+    return max(MAX_OUTPUT_TOKENS, 400 + per_item * max(int(items), 0))
 
 # Strict structured output rejects `uniqueItems` (OpenAI returns 400
 # invalid_json_schema before it even reads the request), so uniqueness of the
@@ -391,6 +404,7 @@ async def _run_openai(
     schema_name: str = "tripshield_ai_insight",
     instructions: str = _SYSTEM_PROMPT,
     user_prompt: str = "Inspect the MCP planning snapshot and explain the deterministic recommendation.",
+    max_output_tokens: int = MAX_OUTPUT_TOKENS,
 ) -> Tuple[Dict[str, Any], List[str]]:
     used: List[str] = []
     previous_response_id: Optional[str] = None
@@ -406,7 +420,7 @@ async def _run_openai(
             "tools": api_tools,
             "tool_choice": "required" if missing else "none",
             "reasoning": {"effort": "low"},
-            "max_output_tokens": MAX_OUTPUT_TOKENS,
+            "max_output_tokens": max_output_tokens,
             "safety_identifier": safety_identifier,
         }
         if previous_response_id:
@@ -421,6 +435,13 @@ async def _run_openai(
                 }
             }
         response = await _maybe_await(client.responses.create(**kwargs))
+        # A response cut off at the ceiling is truncated JSON. It would fail the
+        # schema check as `invalid_model_output`, which reads like the model
+        # broke its contract when in fact we did not give it room to finish.
+        if _value(response, "status") == "incomplete":
+            details = _value(response, "incomplete_details")
+            if str(_value(details, "reason", "")) == "max_output_tokens":
+                raise _AIFlowError("output_truncated")
         previous_response_id = _value(response, "id", previous_response_id)
         calls = [
             item for item in (_value(response, "output", []) or [])
@@ -584,6 +605,7 @@ async def run_structured_agent(
     mcp_client_factory: Optional[Any] = None,
     env: Optional[Mapping[str, str]] = None,
     timeout_seconds: Optional[float] = None,
+    max_output_tokens: int = MAX_OUTPUT_TOKENS,
 ) -> Dict[str, Any]:
     """Run one role-scoped model agent and return sanitized provenance.
 
@@ -656,6 +678,7 @@ async def run_structured_agent(
                 schema_name=schema_name,
                 instructions=instructions,
                 user_prompt=user_prompt,
+                max_output_tokens=max_output_tokens,
             )
 
     try:

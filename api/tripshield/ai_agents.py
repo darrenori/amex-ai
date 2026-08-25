@@ -339,6 +339,11 @@ async def assess_specialty(
         schema_name=f"tripshield_{specialty}_assessment",
         instructions=_SPECIALIST_PROMPT,
         user_prompt=f"Assess all {specialty} recovery tasks for this member.",
+        # Every option id for every task comes back, so eight lodging tasks need
+        # far more room than one flight task.
+        max_output_tokens=ai.output_budget(
+            sum(len(ids) for ids in option_ids_by_task.values())
+        ),
         safety_identifier=safety_identifier,
         output_validator=lambda raw: _specialist_validator(
             raw, option_ids_by_task=option_ids_by_task
@@ -502,6 +507,8 @@ async def recommend_plans(
         schema_name="tripshield_personalized_recommendation",
         instructions=_RECOMMENDATION_PROMPT,
         user_prompt="Personalize the eligible recovery plans for this member.",
+        # Every eligible plan id comes back ordered, plus a trade-off per plan.
+        max_output_tokens=ai.output_budget(len(eligible), per_item=260),
         safety_identifier=safety_identifier,
         output_validator=lambda raw: _recommendation_validator(
             raw,

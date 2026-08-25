@@ -100,6 +100,7 @@ const AI_FAILURE_REASON = {
   rate_limit: 'The provider was rate-limiting, so the deterministic specialist ran instead.',
   authentication: 'The API key was rejected, so the deterministic specialist ran instead.',
   timeout: 'The model did not answer in time, so the deterministic specialist ran instead.',
+  output_truncated: 'The model ran out of room mid-answer, so the deterministic specialist ran instead.',
   invalid_model_output: 'The model broke its output contract, so its answer was discarded.',
   recommendation_mismatch: 'The model tried to change the winner, so its answer was discarded.',
   provider_sdk_unavailable: 'The provider SDK is not installed, so the deterministic specialist ran instead.',
