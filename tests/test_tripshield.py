@@ -316,7 +316,13 @@ def test_every_option_exposes_verified_amex_partner_links():
     for item in connectors.INVENTORY:
         assert item.links, f"{item.id} should expose at least one partner link"
         for link in item.links:
-            assert link["url"].startswith("https://www.americanexpress.com/"), link
+            # Two Amex hosts serve this market: the global site and the
+            # Singapore booking application. The second is not a subdomain of
+            # the first, so it is named rather than assumed.
+            assert link["url"].startswith((
+                "https://www.americanexpress.com/",
+                "https://travel.americanexpress.com.sg/",
+            )), link
             assert link["label"].strip(), link
 
 
@@ -639,3 +645,38 @@ def test_openai_client_can_target_a_free_compatible_endpoint():
             os.environ.pop("OPENAI_BASE_URL", None)
         else:
             os.environ["OPENAI_BASE_URL"] = previous
+
+
+def test_every_shipped_link_is_verified():
+    """Two URLs shipped here returned 404: a Love Dining path that did not
+    exist and a Fine Hotels + Resorts path that is not used in this market.
+    Both looked plausible, which is exactly the problem. Every destination the
+    app can send a member to must be one that was actually requested and
+    answered, so the set below is the allowlist and anything new has to be
+    checked before it joins it."""
+    from api.tripshield import connectors
+
+    verified = {
+        # Checked 2026-08-25, each returned 200.
+        "https://travel.americanexpress.com.sg/shopping/",
+        "https://www.americanexpress.com/en-sg/travel/discover/property-results/c/27/dt/4/d/Tokyo%2CJapan",
+        "https://www.americanexpress.com/en-sg/travel/discover/property-results/c/27/dt/4/d/Osaka%2CJapan",
+        "https://www.americanexpress.com/en-sg/travel/discover/property-results/c/27/dt/4/d/Singapore",
+        "https://www.americanexpress.com/sg/benefits/love-dining/love-dining-hotels.html",
+        "https://www.americanexpress.com/en-sg/travel/hotels/",
+        "https://www.americanexpress.com/en-sg/travel/lounges/the-platinum-card/SIN/sats-premier-lounge-terminal3-RL47nYNPjn/",
+        "https://www.americanexpress.com/en-sg/travel/cars/",
+        "https://www.americanexpress.com/en-sg/travel/discover/property-results/c/27/dt/4/d/Tokyo",
+        "https://www.americanexpress.com/sg/benefits/love-dining/love-restaurants.html",
+    }
+
+    shipped = set()
+    for item in connectors.INVENTORY:
+        for link in list(item.links) + connectors.option_links(item):
+            shipped.add(link["url"])
+
+    unverified = sorted(shipped - verified)
+    assert not unverified, (
+        "these destinations are not in the verified allowlist; request each one "
+        f"and add it only if it answers: {unverified}"
+    )

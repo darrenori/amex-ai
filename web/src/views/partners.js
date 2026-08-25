@@ -12,25 +12,29 @@
 
 import { escapeHtml } from '../format.js';
 
-const ALLOWED_HOST = 'americanexpress.com';
+// Amex serves this market from two registrable domains: the global site, and
+// the Singapore booking application at travel.americanexpress.com.sg. Note that
+// the second does NOT end in `.americanexpress.com`, so it has to be listed
+// rather than assumed, and a member's booking link would otherwise be dropped
+// here without a trace. Each entry still matches only itself or a subdomain of
+// itself, so a lookalike like `evil-americanexpress.com.sg` stays rejected.
+const ALLOWED_HOSTS = ['americanexpress.com', 'americanexpress.com.sg'];
+
+// Where a member goes to act on an option. These point at the booking
+// application rather than the marketing page that describes it: someone
+// following a link from a recovery plan wants to search, not to read about
+// searching. Dining is the exception, because Love Dining is a benefit page
+// rather than a booking flow.
+const AMEX_SHOPPING = 'https://travel.americanexpress.com.sg/shopping/';
 
 const SERVICE_DEFAULTS = {
-  flight: {
-    label: 'Open Amex Travel flights',
-    url: 'https://www.americanexpress.com/en-sg/travel/flights/',
-  },
-  lodging: {
-    label: 'Open Amex Travel hotels',
-    url: 'https://www.americanexpress.com/en-sg/travel/hotels/',
-  },
+  flight: { label: 'Search flights on Amex Travel', url: AMEX_SHOPPING },
+  lodging: { label: 'Search hotels on Amex Travel', url: AMEX_SHOPPING },
   dining: {
     label: 'Open Love Dining restaurants',
     url: 'https://www.americanexpress.com/sg/benefits/love-dining/love-restaurants.html',
   },
-  ground: {
-    label: 'Open Amex Travel transport',
-    url: 'https://www.americanexpress.com/en-sg/travel/cars/',
-  },
+  ground: { label: 'Search transport on Amex Travel', url: AMEX_SHOPPING },
 };
 
 function isAmexUrl(raw) {
@@ -42,7 +46,10 @@ function isAmexUrl(raw) {
   }
   if (url.protocol !== 'https:') return null;
   const host = url.hostname.toLowerCase();
-  if (host !== ALLOWED_HOST && !host.endsWith(`.${ALLOWED_HOST}`)) return null;
+  const allowed = ALLOWED_HOSTS.some(
+    (base) => host === base || host.endsWith(`.${base}`),
+  );
+  if (!allowed) return null;
   return url;
 }
 

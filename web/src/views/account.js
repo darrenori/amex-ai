@@ -58,6 +58,19 @@ function transactionRow(txn, currency) {
     </li>`;
 }
 
+/** Shut every open disclosure in `root`: the trip panel and any <details>. */
+export function collapseDisclosures(root) {
+  if (!root) return;
+  root.querySelectorAll('[aria-expanded="true"]').forEach((toggle) => {
+    toggle.setAttribute('aria-expanded', 'false');
+    const panel = toggle.getAttribute('aria-controls')
+      ? root.querySelector(`#${CSS.escape(toggle.getAttribute('aria-controls'))}`)
+      : null;
+    panel?.classList.remove('is-open');
+  });
+  root.querySelectorAll('details[open]').forEach((d) => d.removeAttribute('open'));
+}
+
 export function renderAccount(container, { data, onCheckFlights, announce }) {
   const { member, trip, transactions, benefits, currency } = data;
   const bookingBlocks = trip.bookings
@@ -215,7 +228,13 @@ export function renderAccount(container, { data, onCheckFlights, announce }) {
 
   container.querySelector('#benefitsButton').addEventListener('click', showBenefits);
   container.querySelector('#benefitsButtonAlt').addEventListener('click', showBenefits);
-  container.querySelector('#checkFlightsButton').addEventListener('click', onCheckFlights);
+  container.querySelector('#checkFlightsButton').addEventListener('click', () => {
+    // Collapse the itinerary on the way out. Leaving it open means coming back
+    // to a screen still scrolled around an expanded panel the member has
+    // finished with, and the recovery console repeats the same bookings anyway.
+    collapseDisclosures(container);
+    onCheckFlights();
+  });
 
   mountIsland(container.querySelector('#rewardsChart'), AreaTrendChart, {
     data: rewardsTrend(member.rewards_points),

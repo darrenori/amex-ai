@@ -843,7 +843,9 @@ def _domestic_inventory() -> List[InventoryItem]:
 # marketing page is deliberately not used as a link here: see amex_partners.py.
 _AMEX_OSAKA = ("https://www.americanexpress.com/en-sg/travel/discover/"
                "property-results/c/27/dt/4/d/Osaka%2CJapan")
-_AMEX_FHR = "https://www.americanexpress.com/en-sg/travel/discover/fine-hotels-resorts/"
+# The dedicated Fine Hotels + Resorts path returns 404 in this market, so the
+# option links to the Osaka property list where those properties appear.
+_AMEX_FHR = _AMEX_OSAKA
 _AMEX_HOTELS = "https://www.americanexpress.com/en-sg/travel/hotels/"
 
 
@@ -965,15 +967,33 @@ def tool_label(tool: str) -> str:
 # its own, and a plausible-looking guess is worse than an honest search page.
 
 _AMEX = "https://www.americanexpress.com"
+
+# The booking application, not the marketing page that describes it. A member
+# following one of these wants to search, so they land where a search happens.
+#
+# The furthest an itinerary can be carried into that link is the point of this
+# comment. A real Amex Travel result URL looks like
+#
+#   travel.americanexpress.com.sg/shopping/#/search-results/air/x9v7yzw7fjm8oc2/2/1
+#
+# and that path segment is a search id the platform mints when a search is run
+# against it. It is not derivable from an origin, a date and a cabin, so it
+# cannot be constructed here without performing that search. The label carries
+# the specifics instead: the supplier and the date the member is searching for.
+_AMEX_SHOPPING = "https://travel.americanexpress.com.sg/shopping/"
+
+# Every URL below was requested and returned 200 on 2026-08-25. Anything added
+# here must be checked the same way; a plausible-looking guess that 404s is
+# worse than a page one level up. See test_every_shipped_link_is_verified.
 _CITY_PROPERTIES = {
     "TYO": f"{_AMEX}/en-sg/travel/discover/property-results/c/27/dt/4/d/Tokyo%2CJapan",
     "OSA": f"{_AMEX}/en-sg/travel/discover/property-results/c/27/dt/4/d/Osaka%2CJapan",
     "SIN": f"{_AMEX}/en-sg/travel/discover/property-results/c/27/dt/4/d/Singapore",
 }
-_AMEX_HOTELS = f"{_AMEX}/en-sg/travel/hotels/"
-_AMEX_FLIGHTS = f"{_AMEX}/en-sg/travel/flights/"
-_AMEX_CARS = f"{_AMEX}/en-sg/travel/cars/"
-_LOVE_DINING = f"{_AMEX}/sg/benefits/love-dining/love-dining-restaurants.html"
+_AMEX_HOTELS = _AMEX_SHOPPING
+_AMEX_FLIGHTS = _AMEX_SHOPPING
+_AMEX_CARS = _AMEX_SHOPPING
+_LOVE_DINING = f"{_AMEX}/sg/benefits/love-dining/love-dining-hotels.html"
 _MONTHS = ("Jan", "Feb", "Mar", "Apr", "May", "Jun",
            "Jul", "Aug", "Sep", "Oct", "Nov", "Dec")
 

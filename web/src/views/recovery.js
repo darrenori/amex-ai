@@ -19,6 +19,7 @@ import { detectMarkup } from './detect.js';
 import { impactMarkup } from './graph.js';
 import { traceMarkup } from './trace.js';
 import { historyMarkup, plansMarkup, weightingMarkup } from './plans.js';
+import { collapseDisclosures } from './account.js';
 import { renderEditor } from './editor.js';
 import { rollbackDialogMarkup, runMarkup } from './execute.js';
 import { mountIsland, unmountAll } from '../islands/mount.js';
@@ -107,6 +108,10 @@ export function renderRecovery(container, { profiles, currency, onBack, announce
   }
 
   function go(stage) {
+    // Anything the member expanded to make this decision has served its purpose
+    // once they proceed, so the next stage opens on a clean panel rather than
+    // inheriting an open findings list from the one before it.
+    collapseDisclosures(body);
     state.stage = stage;
     state.reached.add(stage);
     paintRail();
