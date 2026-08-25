@@ -349,7 +349,7 @@ flowchart LR
     MCP --> P["list_candidate_plans"]
     MCP --> H["get_member_choice_history"]
     MCP --> S["list_specialist_findings"]
-    G & P & H & S --> MODEL["Recommendation AI<br/>Claude or GPT-5.6"]
+    G & P & H & S --> MODEL["Recommendation AI<br/>any configured provider"]
     MODEL --> VALID["Schema + ID + Pareto validation"]
     VALID -->|valid| COPY["Personalized order + explanation"]
     VALID -->|invalid / timeout| FALLBACK["Deterministic order + explanation"]
@@ -378,9 +378,52 @@ limits, tool-loop errors and invalid structured output all preserve the existing
 deterministic result. The UI says when the deterministic fallback was used and
 never labels that result as AI-personalized.
 
-Deployment uses `AI_PROVIDER=openai`, `OPENAI_MODEL=gpt-5.6`, and the secret
-`openai_api_key` on both Vercel and Render. The runtime also accepts the conventional
-uppercase `OPENAI_API_KEY` name for local development and existing environments.
+Deployment uses `AI_PROVIDER=openai` and the secret `openai_api_key` on Render,
+which is where the backend runs. The runtime also accepts the conventional uppercase
+`OPENAI_API_KEY` name for local development.
+
+`OPENAI_MODEL` defaults to the cheap tier rather than the flagship. These agents rank
+options against constraints already checked server-side and write one line of rationale,
+which is small bounded work: measured at roughly a second a call against several for the
+flagship, at a fraction of the price.
+
+`OPENAI_BASE_URL` redirects the same client at any OpenAI-compatible endpoint. That is
+the whole free-tier story, since OpenAI has no free tier but its wire protocol is spoken
+by providers that do, and tool calling and strict structured output are untouched by the
+swap.
+
+### Provider failures that are not outages
+
+Three of these cost a call, or look like they should have, and each was mistaken for
+something else before it was understood. They are recorded because the next person will
+otherwise read the same symptom the same wrong way.
+
+| Symptom | Actual cause | Where it is handled |
+| --- | --- | --- |
+| Every agent fails identically, whatever the billing state | Strict mode rejects `uniqueItems`, and strict function calling requires `additionalProperties: false` with every property named in `required`. FastMCP derives tool schemas from the Python signature and emits neither, so the request is refused before it is costed | `ai.py` normalises every schema at the provider boundary |
+| Every failure reports the same generic provider error | Agents run concurrently, so the provider exception arrives wrapped in an `ExceptionGroup`; classifying the wrapper discards the cause | `_exception_code` unwraps before it classifies |
+| The model "did not answer in time", uniformly, to the millisecond | A default deadline the work does not fit inside. A bounded agent measures 10 to 23 seconds against a current model | The default is 45 seconds; lower it deliberately, not by omission |
+
+Two more are worth stating because they trade cost against reliability rather than
+correctness. Output is capped, but the cap scales with the work an agent was given: a
+specialist returns every option id for every one of its tasks, so eight lodging tasks
+cannot be enumerated in the same breath as one flight, and a truncated answer fails
+validation and wastes the tokens already spent. And an agent gets one retry when its
+answer fails validation, because the validators are exacting on purpose and a model slip
+is not deterministic; the retry costs a second call only when the first was going to be
+discarded anyway.
+
+### What crosses the boundary
+
+The snapshot is a projection, not the full record. An agent choosing between options
+needs what tells them apart, not the plumbing that books them, so adapter calls, offer
+ids, connector keys, provenance and the synthetic flag stay server-side where execution
+and the audit trail need them:
+
+```
+  before   110,562 chars   ~27,600 input tokens per plan request
+  after     55,537 chars   ~13,900 input tokens per plan request
+```
 
 Profile features and choice history are server-created inputs. The model may use
 them to make a contextual preference decision, but it cannot rewrite the stored
@@ -525,6 +568,21 @@ fixtures, as do dining and ground transport.
 | `explain.py` | Reason codes and audit records | ✔ |
 | `execution.py` | Saga engine and compensation | ✔ |
 | `store.py` | Session state and audit trail | ✔ |
+
+The frontend is a vanilla-JS shell with React mounted into it only where a component
+earns it. `islands/mount.js` owns the roots, because the console replaces `body.innerHTML`
+on every stage change and React has to be told before its container is detached.
+
+| Island | Responsibility |
+| --- | --- |
+| `DependencyGraph.jsx` | The graph as a board: drag a booking, click to trace its chain upstream and down |
+| `ResolveChoropleth.jsx` | The journey map: dotted legs that resolve as the run commits |
+| `AreaTrendChart.jsx` | Rewards trend on the account overview |
+
+| Boundary module | Responsibility |
+| --- | --- |
+| `views/partners.js` | The outbound link allowlist, enforced at the render boundary rather than at the source |
+| `views/tutorial.js` | The walkthrough, opened once per browser then kept in the app bar |
 
 ---
 
