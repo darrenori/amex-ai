@@ -576,3 +576,66 @@ def test_openai_tool_schemas_are_normalised_for_strict_mode():
                 every_object(value)
 
     every_object(nested)
+
+
+def test_agent_snapshots_omit_plumbing_the_model_must_not_act_on():
+    """Every field crossing the MCP boundary is paid for in tokens on each
+    agent call. Provenance, adapter calls and offer ids are server-side
+    concerns the agent is forbidden to act on, so they must not be sent."""
+    from api.tripshield.ai_agents import _lean_option, _lean_plan, _lean_graph
+
+    lean = _lean_option({
+        "id": "opt_x", "task_id": "task_x", "title": "Keep it",
+        "detail": "d" * 200, "cost_delta": 0.0, "quality": 0.9,
+        "tool_call": "Book the room", "tool_endpoint": "rest/liteapi · POST /rates/book",
+        "source_upstream": "LiteAPI", "source_mode": "fixture", "source_note": "x",
+        "supplier_offer_id": "rate_9QR", "connector": "lodging", "synthetic": True,
+    })
+    for leaked in (
+        "tool_call", "tool_endpoint", "source_upstream", "source_mode",
+        "source_note", "supplier_offer_id", "connector", "synthetic",
+    ):
+        assert leaked not in lean, leaked
+    assert lean["id"] == "opt_x" and lean["cost_delta"] == 0.0
+    assert len(lean["detail"]) <= 90
+
+    assert "score_breakdown" not in _lean_plan({
+        "id": "plan_01", "score": 1.0, "score_breakdown": "Money -SGD 145 + ...",
+    })
+
+    graph = _lean_graph({
+        "nodes": [{"id": "bk", "label": "L", "status": "broken", "amount": 1.0,
+                   "supplier_ref": "ord_secret", "note": "n" * 300, "meta": {"a": 1}}],
+        "edges": [{"source": "a", "target": "b", "severity": "hard",
+                   "rationale": "r" * 300}],
+        "assessment": {"verdicts": {"bk": {"status": "broken", "slack_minutes": -5,
+                                           "reason": "z" * 300}}, "affected": ["bk"]},
+    })
+    assert "supplier_ref" not in graph["nodes"][0] and "note" not in graph["nodes"][0]
+    assert "rationale" not in graph["edges"][0]
+    assert "reason" not in graph["assessment"]["verdicts"]["bk"]
+    assert graph["assessment"]["verdicts"]["bk"]["status"] == "broken"
+
+
+def test_openai_client_can_target_a_free_compatible_endpoint():
+    """OpenAI has no free tier, but Gemini, Groq, OpenRouter and Ollama all
+    speak its protocol. Redirecting the base URL is what makes a free provider
+    usable without touching the tool-calling or strict-schema paths."""
+    import os
+    from api.tripshield.ai import _provider_client
+
+    previous = os.environ.get("OPENAI_BASE_URL")
+    try:
+        os.environ["OPENAI_BASE_URL"] = "https://api.groq.com/openai/v1"
+        client = _provider_client("openai", "sk-test", 5.0)
+        assert "groq.com" in str(client.base_url)
+        # A quota 429 can never succeed on retry; the fallback is the safety net.
+        assert client.max_retries == 0
+
+        os.environ.pop("OPENAI_BASE_URL")
+        assert "api.openai.com" in str(_provider_client("openai", "sk-test", 5.0).base_url)
+    finally:
+        if previous is None:
+            os.environ.pop("OPENAI_BASE_URL", None)
+        else:
+            os.environ["OPENAI_BASE_URL"] = previous

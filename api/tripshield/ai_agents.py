@@ -187,6 +187,86 @@ def _specialist_validator(
     return {"assessments": validated}
 
 
+
+# A model ranking options needs what distinguishes them, not the plumbing that
+# books them. Provenance, adapter calls, offer ids and connector keys are all
+# server-side concerns that the agent is forbidden to act on anyway, so sending
+# them only buys tokens. The full record stays on the server for the audit
+# trail and for execution; only this projection crosses the MCP boundary.
+_OPTION_FIELDS = (
+    "id", "task_id", "title", "supplier", "start", "end",
+    "cost_delta", "hours_lost", "quality", "reliability_risk",
+    "changes_booking", "drops_booking", "optional",
+)
+_TASK_FIELDS = ("id", "booking_id", "label", "objective", "constraints", "tools")
+_DETAIL_CHARS = 90
+
+
+def _lean_option(option: Mapping[str, Any]) -> Dict[str, Any]:
+    """Keep only the fields an agent needs to tell two options apart."""
+    lean: Dict[str, Any] = {
+        key: option[key] for key in _OPTION_FIELDS if key in option
+    }
+    detail = str(option.get("detail") or "").strip()
+    if detail:
+        lean["detail"] = (
+            detail if len(detail) <= _DETAIL_CHARS else detail[: _DETAIL_CHARS - 1] + "…"
+        )
+    return lean
+
+
+def _lean_task(task: Mapping[str, Any]) -> Dict[str, Any]:
+    """Drop the running log — it repeats what the inventory already says."""
+    return {key: task[key] for key in _TASK_FIELDS if key in task}
+
+
+
+# The final agent chooses between whole plans. It needs each plan's metrics and
+# what it does to the trip, not the prose breakdown the UI renders, and it needs
+# the graph's shape and each booking's fate rather than every supplier field.
+_PLAN_FIELDS = (
+    "id", "name", "strategy", "score", "valid", "pareto_optimal",
+    "violations", "metrics", "selections", "summary",
+)
+_NODE_FIELDS = ("id", "label", "kind", "status", "amount", "start")
+_EDGE_FIELDS = ("source", "target", "severity")
+
+
+def _lean_plan(plan: Mapping[str, Any]) -> Dict[str, Any]:
+    return {key: plan[key] for key in _PLAN_FIELDS if key in plan}
+
+
+def _lean_graph(graph: Mapping[str, Any]) -> Dict[str, Any]:
+    lean: Dict[str, Any] = {}
+    nodes = graph.get("nodes")
+    if isinstance(nodes, list):
+        lean["nodes"] = [
+            {k: n[k] for k in _NODE_FIELDS if k in n}
+            for n in nodes if isinstance(n, Mapping)
+        ]
+    edges = graph.get("edges")
+    if isinstance(edges, list):
+        lean["edges"] = [
+            {k: e[k] for k in _EDGE_FIELDS if k in e}
+            for e in edges if isinstance(e, Mapping)
+        ]
+    if "cancelled" in graph:
+        lean["cancelled"] = graph["cancelled"]
+    assessment = graph.get("assessment")
+    if isinstance(assessment, Mapping):
+        verdicts = assessment.get("verdicts")
+        lean["assessment"] = {
+            "affected": assessment.get("affected"),
+            "exposure": assessment.get("exposure"),
+            # Only the fate and the margin; the prose reason is the UI's job.
+            "verdicts": {
+                str(k): {"status": v.get("status"), "slack_minutes": v.get("slack_minutes")}
+                for k, v in verdicts.items() if isinstance(v, Mapping)
+            } if isinstance(verdicts, Mapping) else verdicts,
+        }
+    return lean
+
+
 async def assess_specialty(
     *,
     specialty: str,
@@ -219,15 +299,15 @@ async def assess_specialty(
 
     search_tool = f"search_{specialty}_inventory"
     safe_tasks = [
-        {
+        _lean_task({
             **task,
             "tools": ["get_recovery_tasks", search_tool, "get_member_choice_history"],
-        }
+        })
         for task in usable_tasks
     ]
     task_ids = [str(task["id"]) for task in safe_tasks]
     inventory = {
-        task_id: list(options_by_task[task_id])
+        task_id: [_lean_option(option) for option in options_by_task[task_id]]
         for task_id in task_ids
     }
     option_ids_by_task = {
@@ -395,11 +475,15 @@ async def recommend_plans(
         tools={
             "get_trip_graph": (
                 "Read the immutable trip graph, disruption and deterministic impact.",
-                graph,
+                _lean_graph(graph),
             ),
             "list_candidate_plans": (
                 "Read validated plans, immutable metrics, eligibility and baseline order.",
-                {"plans": list(plans), "ranking": ranking, "eligible_plan_ids": eligible},
+                {
+                    "plans": [_lean_plan(plan) for plan in plans],
+                    "ranking": ranking,
+                    "eligible_plan_ids": eligible,
+                },
             ),
             "get_member_choice_history": (
                 "Read the immutable member preference profile and synthetic choice history.",

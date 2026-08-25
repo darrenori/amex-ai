@@ -35,7 +35,13 @@ DEFAULT_ANTHROPIC_MODEL = "claude-sonnet-5"
 # serving-tier name as the deploy-safe default.
 DEFAULT_OPENAI_MODEL = "gpt-5.6"
 DEFAULT_TIMEOUT_SECONDS = 8.0
-MAX_MODEL_ROUNDS = 5
+# Each agent reads its three tools in one round and answers in the next, so the
+# ceiling only needs to cover a retry, not five.
+MAX_MODEL_ROUNDS = 3
+
+# A ranking plus a short rationale, not an essay. Without a ceiling a reasoning
+# model is free to spend far more than the answer is worth.
+MAX_OUTPUT_TOKENS = 900
 
 # Strict structured output rejects `uniqueItems` (OpenAI returns 400
 # invalid_json_schema before it even reads the request), so uniqueness of the
@@ -174,6 +180,7 @@ def ai_status(env: Optional[Mapping[str, str]] = None) -> Dict[str, Any]:
         "model": selected.get("model"),
         "credential_present": selected.get("credential_present", False),
         "transport": "in_process" if mcp_sdk_available() else "unavailable",
+        "base_url": str(_env(env).get("OPENAI_BASE_URL", "")).strip() or None,
         "tools": list(TOOL_NAMES),
         "error_code": error_code,
     }
@@ -399,6 +406,7 @@ async def _run_openai(
             "tools": api_tools,
             "tool_choice": "required" if missing else "none",
             "reasoning": {"effort": "low"},
+            "max_output_tokens": MAX_OUTPUT_TOKENS,
             "safety_identifier": safety_identifier,
         }
         if previous_response_id:
@@ -519,7 +527,19 @@ def _provider_client(provider: str, api_key: str, timeout: float) -> Any:
     if provider == "openai":
         if _openai is None or not hasattr(_openai, "AsyncOpenAI"):
             raise _AIFlowError("provider_sdk_unavailable")
-        return _openai.AsyncOpenAI(api_key=api_key, timeout=timeout)
+        # An exhausted balance returns 429, which the SDK retries by default —
+        # three attempts per agent that cannot possibly succeed, and real money
+        # once they can. One attempt is enough; the deterministic fallback is
+        # already the safety net.
+        #
+        # OPENAI_BASE_URL redirects the same client at any OpenAI-compatible
+        # endpoint. That is the whole free-tier story: Gemini, Groq, OpenRouter
+        # and a local Ollama all speak this protocol, so tool calling and strict
+        # structured output keep working untouched. See .env.example for URLs.
+        base_url = str(os.environ.get("OPENAI_BASE_URL", "")).strip() or None
+        return _openai.AsyncOpenAI(
+            api_key=api_key, timeout=timeout, max_retries=0, base_url=base_url,
+        )
     raise _AIFlowError("invalid_provider")
 
 
