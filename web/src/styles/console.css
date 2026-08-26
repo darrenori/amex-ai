@@ -635,7 +635,7 @@
   height: 100%;
   border-radius: var(--radius-pill);
   background: var(--primary);
-  transition: width var(--duration-base) var(--easing);
+  transition: width 550ms var(--easing);
 }
 
 .xprogress-label {
@@ -656,6 +656,10 @@
 
 .xstep:last-child { padding-bottom: 0; }
 
+/* The spine. Grey ahead of the cursor, brand blue behind it — the progress bar
+   at the top of the card, laid on its side and read top to bottom. The fill is
+   a separate layer so committing a step can *draw* it in rather than repaint
+   it; `scaleY` on a 2px column is compositor-only, so the draw costs nothing. */
 .xstep-rail {
   position: absolute;
   left: 17px;
@@ -663,8 +667,19 @@
   bottom: 4px;
   width: 2px;
   background: var(--border-subtle);
+  overflow: hidden;
 }
 
+.xstep-rail-fill {
+  display: block;
+  height: 100%;
+  background: var(--primary);
+  transform: scaleY(0);
+  transform-origin: top center;
+  transition: transform 500ms var(--easing);
+}
+
+.xstep.is-passed .xstep-rail-fill { transform: scaleY(1); }
 .xstep:last-child .xstep-rail { display: none; }
 .xstep .icon-badge { flex: none; z-index: 1; }
 .xstep-body { flex: 1; min-width: 0; }
@@ -679,7 +694,18 @@
   word-break: break-all;
 }
 
-.xstep-amount { margin-top: var(--space-2); font-size: var(--text-sm); font-weight: 600; font-variant-numeric: tabular-nums; }
+/* Money and the receipt toggle share one row: the toggle is a control the
+   member needs on every settled step, and a row of its own on each of them is
+   exactly the drift this screen is trying to stop. */
+.xstep-foot {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  margin-top: var(--space-2);
+}
+
+.xstep-foot:empty { display: none; }
+.xstep-amount { font-size: var(--text-sm); font-weight: 600; font-variant-numeric: tabular-nums; }
 .xstep-log { margin-top: var(--space-2); display: flex; flex-direction: column; gap: var(--space-1); }
 
 .xstep-log li {
@@ -702,8 +728,73 @@
 .xstep-pending .xstep-title, .xstep-skipped .xstep-title { color: var(--ink-subdued); }
 .xstep-skipped .xstep-detail { text-decoration: line-through; }
 
-.xactions { display: flex; flex-wrap: wrap; gap: var(--space-2); margin-top: var(--space-5); }
+/* A settled step keeps its headline and its money and folds the rest away, so
+   the list is the same height after five commits as it was before the first.
+   `0fr -> 1fr` folds to the content's own height without measuring it, and —
+   the reason it is CSS rather than a scripted tween — an interrupted
+   transition still leaves a height the layout agrees with. */
+.xstep-more {
+  display: grid;
+  grid-template-rows: 0fr;
+  opacity: 0;
+  transition: grid-template-rows 300ms var(--easing), opacity 200ms var(--easing);
+}
+
+.xstep-more.is-open { grid-template-rows: 1fr; opacity: 1; }
+
+/* The padding lives inside the collapsing track, never on `.is-open`: applied
+   on the class it would land in one frame while the row was still folding. */
+.xstep-more-inner { min-height: 0; overflow: hidden; padding-top: var(--space-2); }
+.xstep-more-inner > * + * { margin-top: var(--space-2); }
+.xstep-more-inner .xstep-call { margin-top: 0; }
+
+.xstep-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  margin-left: auto;
+  padding: var(--space-1) 0;
+  border: 0;
+  background: none;
+  color: var(--ink-muted);
+  font: inherit;
+  font-size: var(--text-xs);
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  cursor: pointer;
+}
+
+.xstep-toggle:hover { color: var(--primary-pressed); }
+.xstep-toggle .expand { display: block; transition: transform var(--duration-base) var(--easing); }
+.xstep-toggle .expand svg { width: 14px; height: 14px; display: block; }
+.xstep-toggle[aria-expanded="true"] .expand { transform: rotate(180deg); }
+.xstep.is-settled .xstep-toggle { color: var(--ink-subdued); }
+
+/* The button that commits the next step must not move when the list under it
+   changes, so it rides the bottom of the viewport for as long as the run card
+   is taller than the screen. */
+.xactions {
+  position: sticky;
+  bottom: var(--space-3);
+  z-index: 2;
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  margin-top: var(--space-5);
+}
+
+.xactions:not(:empty) {
+  padding: var(--space-3);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  background: color-mix(in srgb, var(--canvas) 92%, transparent);
+  backdrop-filter: blur(8px);
+  box-shadow: var(--shadow-card);
+}
+
+.xactions:empty { display: none; }
 .xactions .btn svg { width: 15px; height: 15px; }
+
 
 .xdone {
   display: flex;
@@ -763,6 +854,9 @@
   .stage-tab,
   .obj-fill,
   .xprogress-fill,
+  .xstep-rail-fill,
+  .xstep-more,
+  .xstep-toggle .expand,
   .lane-drop,
   .opt,
   .toggle-group-sub {

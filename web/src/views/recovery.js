@@ -21,7 +21,7 @@ import { traceMarkup } from './trace.js';
 import { historyMarkup, plansMarkup, weightingMarkup } from './plans.js';
 import { collapseDisclosures } from './account.js';
 import { renderEditor } from './editor.js';
-import { rollbackDialogMarkup, runMarkup } from './execute.js';
+import { mountRun, rollbackDialogMarkup } from './execute.js';
 import { mountIsland, unmountAll } from '../islands/mount.js';
 import DependencyGraph from '../islands/DependencyGraph.jsx';
 import ResolveChoropleth from '../islands/ResolveChoropleth.jsx';
@@ -45,6 +45,8 @@ function computeRegions(run) {
     status: i < done ? 'resolved' : i === done ? 'resolving' : 'at_risk',
   }));
 }
+
+const prefersReduced = () => window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 
 const STAGES = [
   { id: 'detect', label: 'Detect', hint: 'Find the disruption' },
@@ -407,7 +409,13 @@ export function renderRecovery(container, { profiles, currency, onBack, announce
   const optionsById = () =>
     Object.fromEntries((state.planning?.options ?? []).map((o) => [o.id, o]));
 
+  // The run is mounted once and patched from then on, so committing a step is
+  // an animated change to the list rather than a fresh copy of it. `null`
+  // whenever stage 5 is not on screen.
+  let runView = null;
+
   function paintExecute() {
+    runView = null;
     if (!state.run) {
       body.innerHTML = `
         <div class="card stage-empty">
@@ -425,6 +433,7 @@ export function renderRecovery(container, { profiles, currency, onBack, announce
           One transaction at a time, in dependency order, each verified before the next unlocks.
         </p>
       </div>
+      <div id="runHost"></div>
       <div class="card resolve-card">
         <div class="card-head">
           <div>
@@ -433,23 +442,52 @@ export function renderRecovery(container, { profiles, currency, onBack, announce
           </div>
         </div>
         <div id="resolveHost"></div>
-      </div>
-      ${runMarkup(state.run, currency, optionsById())}`;
+      </div>`;
 
-    mountIsland(body.querySelector('#resolveHost'), ResolveChoropleth, {
-      regions: computeRegions(state.run), progress: state.run.progress ?? 0,
+    // The run comes first and the map after it. The map is the nicer thing to
+    // look at and the run is the thing being done: ordered the other way, the
+    // member arrived at stage five 540px above the only button on the screen.
+    runView = mountRun(body.querySelector('#runHost'), {
+      run: state.run, currency, optionsById: optionsById(),
     });
+    paintResolveMap();
+    body.addEventListener('click', onExecuteClick);
+  }
 
-    const advance = body.querySelector('#advanceRun');
-    if (advance) advance.addEventListener('click', onAdvance);
-    body.querySelector('#stopRun')?.addEventListener('click', () => onCancel(false));
-    body.querySelector('#undoRun')?.addEventListener('click', () => onCancel(true));
+  function paintResolveMap() {
+    const host = body.querySelector('#resolveHost');
+    if (!host) return;
+    mountIsland(host, ResolveChoropleth, {
+      regions: computeRegions(state.run), progress: state.run?.progress ?? 0,
+    });
+  }
+
+  function onExecuteClick(event) {
+    if (event.target.closest('#advanceRun')) return onAdvance(event);
+    if (event.target.closest('#stopRun')) return onCancel(false);
+    if (event.target.closest('#undoRun')) return onCancel(true);
+  }
+
+  // Patch the run in place and keep the live step on screen. Between this and
+  // the sticky action bar the member never has to move the page themselves.
+  function refreshRun() {
+    if (!runView) return paintExecute();
+    runView.update(state.run, optionsById());
+    paintResolveMap();
+    const live = runView.liveStep();
+    if (!live) return;
+    const box = live.getBoundingClientRect();
+    const floor = window.innerHeight - 140;   // clears the sticky action bar
+    if (box.top < 80 || box.bottom > floor) {
+      live.scrollIntoView({ block: 'center', behavior: prefersReduced() ? 'auto' : 'smooth' });
+    }
   }
 
   async function onAdvance(event) {
     if (state.busy) return;
     state.busy = true;
-    const button = event.currentTarget;
+    // Delegated, so `currentTarget` is the stage body — take the button itself.
+    const button = event.target.closest('#advanceRun');
     button.disabled = true;
 
     try {
@@ -457,7 +495,7 @@ export function renderRecovery(container, { profiles, currency, onBack, announce
       const authorising = next?.state === 'awaiting_approval';
       const result = await api.advance(state.run.id, authorising);
       state.run = result.run;
-      paint();
+      refreshRun();
 
       const step = result.result.step;
       if (result.result.reason === 'awaiting_payment') {
@@ -480,7 +518,7 @@ export function renderRecovery(container, { profiles, currency, onBack, announce
       try {
         const result = await api.cancelRun(state.run.id, false);
         state.run = result.run;
-        paint();
+        refreshRun();
         announce('Recovery stopped. Steps already committed are left in place, nothing was reversed.');
       } catch (error) {
         announce(error.message);
@@ -502,7 +540,7 @@ export function renderRecovery(container, { profiles, currency, onBack, announce
         const result = await api.cancelRun(state.run.id, true);
         state.run = result.run;
         closeModal(false);
-        paint();
+        refreshRun();
         announce(
           `Rollback complete. ${money(result.refunded, currency)} refunded` +
           (result.unrecoverable ? `, ${money(result.unrecoverable, currency)} could not be recovered.` : ' in full.'),
@@ -518,6 +556,7 @@ export function renderRecovery(container, { profiles, currency, onBack, announce
 
   function paint() {
     body.removeEventListener('click', onPlanClick);
+    body.removeEventListener('click', onExecuteClick);
     unmountAll(body);
     if (state.stage === 'detect') return paintDetect();
     if (state.stage === 'impact') return paintImpact();
@@ -533,6 +572,7 @@ export function renderRecovery(container, { profiles, currency, onBack, announce
 
   return () => {
     body.removeEventListener('click', onPlanClick);
+    body.removeEventListener('click', onExecuteClick);
     unmountAll(body);
   };
 }
