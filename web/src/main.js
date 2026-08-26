@@ -108,6 +108,13 @@ function showHome() {
 
 initHome(dom.homeView, { onEnter: openApp, reducedMotion: reducedMotion.matches });
 
+// The API runs on Render's free plan, which may sleep between visitors. Start
+// its wake-up request while the visitor is reading the landing page instead of
+// making the Open demo button pay the entire cold-start cost. This is best
+// effort only: opening the demo keeps its own real account/profile requests
+// and handles an unavailable backend normally.
+void api.health().catch(() => undefined);
+
 // ---------------------------------------------------------------------------
 // Views
 // ---------------------------------------------------------------------------
