@@ -450,6 +450,7 @@ DESIGN.md                     The American Express design system this is built o
 | Method | Route | Purpose |
 | --- | --- | --- |
 | `GET` | `/api/health` | Liveness |
+| `GET` | `/api/ping` | Minimal no-dependency deployment and keep-alive probe |
 | `POST` | `/api/auth/login` | Demo credential check |
 | `GET` | `/api/account` | Member, card, transactions, benefits, trip |
 | `GET` | `/api/bookings` | The single source of truth — every booking on one Card |

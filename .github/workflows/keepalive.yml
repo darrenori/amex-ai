@@ -5,7 +5,7 @@
 # times out before the agents ever start. A cheap request every 10 minutes keeps
 # it resident.
 #
-# `/api/health` is deliberate: it touches no connector, calls no model and
+# `/api/ping` is deliberate: it touches no connector, calls no model and
 # returns a few bytes, so this costs nothing but the instance hours it is
 # protecting. Note that a free web service is metered at 750 hours a month and
 # staying awake all month spends about 744 of them — fine for this one service,
@@ -40,7 +40,7 @@ jobs:
       - name: Wake the Render service
         env:
           # Override with a repository variable if the hostname ever changes.
-          API_URL: ${{ vars.KEEPALIVE_URL || 'https://tripshield-api.onrender.com/api/health' }}
+          API_URL: ${{ vars.KEEPALIVE_URL || 'https://tripshield-api.onrender.com/api/ping' }}
         run: |
           # A sleeping instance needs time to boot, so allow a slow first byte
           # and retry rather than reporting a cold start as an outage.

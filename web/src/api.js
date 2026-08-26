@@ -64,6 +64,7 @@ const q = (params) =>
 
 export const api = {
   health: () => request('/health'),
+  ping: () => request('/ping'),
   login: (email, password) => request('/auth/login', { method: 'POST', body: { email, password } }),
 
   // Account

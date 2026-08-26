@@ -4,7 +4,7 @@
 # (Vite build, hosted on Vercel) calls this service by setting VITE_API_BASE to
 # https://<service>.onrender.com/api at build time.
 #
-# Every route is declared under /api, so the health check is /api/health.
+# Every route is declared under /api, so the health check is /api/ping.
 services:
   - type: web
     name: tripshield-api
@@ -13,7 +13,7 @@ services:
     region: singapore
     buildCommand: pip install -r requirements.txt
     startCommand: uvicorn api.index:app --host 0.0.0.0 --port $PORT
-    healthCheckPath: /api/health
+    healthCheckPath: /api/ping
     autoDeploy: true
     envVars:
       - key: PYTHON_VERSION

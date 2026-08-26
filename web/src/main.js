@@ -113,7 +113,7 @@ initHome(dom.homeView, { onEnter: openApp, reducedMotion: reducedMotion.matches 
 // making the Open demo button pay the entire cold-start cost. This is best
 // effort only: opening the demo keeps its own real account/profile requests
 // and handles an unavailable backend normally.
-void api.health().catch(() => undefined);
+void api.ping().catch(() => undefined);
 
 // ---------------------------------------------------------------------------
 // Views

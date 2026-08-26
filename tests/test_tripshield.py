@@ -40,6 +40,13 @@ def client() -> TestClient:
     return TestClient(app)
 
 
+def test_ping_is_a_minimal_liveness_probe(client):
+    response = client.get("/api/ping")
+
+    assert response.status_code == 200
+    assert response.json() == {"status": "ok"}
+
+
 @pytest.fixture()
 def planned():
     """The full planning pass, populated exactly the way the API populates it.

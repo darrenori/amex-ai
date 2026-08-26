@@ -123,6 +123,12 @@ def health() -> Dict[str, Any]:
     return {"status": "ok", "service": "tripshield-api", "version": app.version}
 
 
+@app.get(f"{API}/ping")
+def ping() -> Dict[str, str]:
+    """Minimal liveness probe. It must not read sessions or call integrations."""
+    return {"status": "ok"}
+
+
 @app.post(f"{API}/auth/login")
 def login(payload: LoginRequest) -> Dict[str, Any]:
     """Demo credential check. Nothing here is a real authentication system."""
