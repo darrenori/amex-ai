@@ -41,17 +41,23 @@ jobs:
         env:
           # Override with a repository variable if the hostname ever changes.
           API_URL: ${{ vars.KEEPALIVE_URL || 'https://tripshield-api.onrender.com/api/ping' }}
+          # The deployed service may be one revision behind during a rollout.
+          # `/health` has existed since the first release and keeps the same
+          # service awake while the new minimal `/ping` route is rolling out.
+          FALLBACK_API_URL: https://tripshield-api.onrender.com/api/health
         run: |
           # A sleeping instance needs time to boot, so allow a slow first byte
           # and retry rather than reporting a cold start as an outage.
           for attempt in 1 2 3; do
-            code=$(curl -sS -o /tmp/body.txt -w '%{http_code}' \
-                        --max-time 90 --retry 0 "$API_URL" || echo 000)
-            echo "attempt $attempt -> HTTP $code"
-            if [ "$code" = "200" ]; then
-              echo "awake: $(cat /tmp/body.txt)"
-              exit 0
-            fi
+            for url in "$API_URL" "$FALLBACK_API_URL"; do
+              code=$(curl -sS -o /tmp/body.txt -w '%{http_code}' \
+                          --max-time 90 --retry 0 "$url" || echo 000)
+              echo "attempt $attempt, $url -> HTTP $code"
+              if [ "$code" = "200" ]; then
+                echo "awake: $(cat /tmp/body.txt)"
+                exit 0
+              fi
+            done
             sleep 15
           done
           echo "::warning::No 200 from $API_URL after 3 attempts (last: $code)"
