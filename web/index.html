@@ -30,7 +30,14 @@
         </div>
       </header>
 
-      <main class="home-hero">
+      <main class="home-hero" data-parallax-root>
+        <img
+          class="home-hero-image"
+          src="/airport-hero.jpg"
+          alt="Travellers moving through a bright airport terminal"
+          fetchpriority="high"
+          data-parallax-image
+        >
         <div class="wrap home-hero-inner">
           <div class="home-editorial-head">
             <div class="home-copy">
@@ -49,22 +56,19 @@
             </div>
           </div>
 
-          <figure class="home-visual" data-animate data-parallax-root>
-            <img
-              class="home-visual-image"
-              src="/skypark-observation-deck.avif"
-              alt="Marina Bay Sands SkyPark above Singapore"
-              fetchpriority="high"
-              data-parallax-image
-            >
-            <div class="home-visual-label">Singapore → Tokyo <span>·</span> September journey</div>
-            <figcaption class="journey-note">
+          <section class="home-journey-panel" data-animate aria-label="Current recovery example">
+            <div class="home-journey-copy">
+              <span class="journey-state"><span aria-hidden="true"></span>Recovery in progress</span>
               <span class="journey-note-time">Detected 08:42 SGT</span>
-              <strong>SQ638 cancelled</strong>
-              <p>Six connected bookings checked together. Recovery options are ready to review.</p>
-            </figcaption>
-            <span class="journey-state"><span aria-hidden="true"></span>Recovery in progress</span>
-          </figure>
+              <h2>SQ638 cancelled</h2>
+              <p>Soft Landing checked the six connected bookings together. Complete recovery options are ready to review.</p>
+            </div>
+            <dl class="home-journey-stats">
+              <div><dt>Route</dt><dd>Singapore → Tokyo</dd></div>
+              <div><dt>Trip at risk</dt><dd>6 bookings</dd></div>
+              <div><dt>Next step</dt><dd>Member review</dd></div>
+            </dl>
+          </section>
 
           <div class="home-concept-line" data-reveal>
             <p class="concept-badge">Hackathon concept · not a live Amex service</p>
