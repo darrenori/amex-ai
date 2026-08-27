@@ -80,10 +80,18 @@
 .brand {
   display: inline-flex;
   align-items: center;
-  gap: var(--space-3);
   text-decoration: none;
   color: inherit;
 }
+
+.brand-logo {
+  display: block;
+  width: 132px;
+  height: 44px;
+  object-fit: contain;
+}
+
+.appbar .brand-logo { filter: brightness(0) saturate(100%); }
 
 .brand-mark {
   display: grid;

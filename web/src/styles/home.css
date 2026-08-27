@@ -11,7 +11,30 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
+  gap: var(--space-4);
   min-height: 64px;
+}
+
+.home-nav-actions {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+.github-link {
+  color: var(--ink-on-navy);
+  font-size: var(--text-sm);
+  font-weight: 600;
+  text-decoration: none;
+}
+
+.github-link:hover { text-decoration: underline; }
+
+@media (max-width: 520px) {
+  .brand-logo { width: 108px; }
+  .home-nav-actions { gap: var(--space-2); }
+  .github-link { font-size: var(--text-xs); }
+  .home-nav-actions .btn { padding-inline: var(--space-3); }
 }
 
 /* ---------- Hero ---------- */

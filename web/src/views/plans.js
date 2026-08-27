@@ -57,7 +57,7 @@ function aiExplanationMarkup(ai, visiblePlanIds = []) {
             <strong>Your options were still checked and ranked safely</strong>
           </div>
         </div>
-        <p>The personalized recommendation service was unavailable, so TripShield used its validated whole-trip ranking.</p>
+        <p>The personalized recommendation service was unavailable, so Soft Landing used its validated whole-trip ranking.</p>
       </aside>`;
   }
   const rationale = memberFacingText(ai.ranking_rationale ?? ai.rationale ?? '');
@@ -255,9 +255,9 @@ export function plansMarkup(plans, ranking, currency, optionsById) {
 
   return `
     <div class="notif">
-      <span class="notif-icon" aria-hidden="true">TS</span>
+      <span class="notif-icon" aria-hidden="true">SL</span>
       <div style="flex:1;min-width:0">
-        <div class="notif-top"><span class="notif-app">TripShield</span><span class="notif-time">now</span></div>
+        <div class="notif-top"><span class="notif-app">Soft Landing</span><span class="notif-time">now</span></div>
         <p class="notif-msg">${escapeHtml(ranking.notification)}</p>
       </div>
     </div>

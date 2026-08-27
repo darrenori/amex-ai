@@ -88,7 +88,7 @@ export function renderAccount(container, { data, onCheckFlights, announce }) {
       <div class="card-art">
         <div class="card-art-top">
           <span class="card-tier"><span class="tier-rule" aria-hidden="true"></span>${escapeHtml(member.tier)}</span>
-          <span class="brand-mark" aria-hidden="true">TS</span>
+          <span class="brand-mark" aria-hidden="true">SL</span>
         </div>
         <div>
           <h3>${escapeHtml(member.card_label)}</h3>
@@ -178,7 +178,7 @@ export function renderAccount(container, { data, onCheckFlights, announce }) {
         </div>
         <p class="muted" style="margin-top:12px;font-size:var(--text-sm)">
           All ${trip.bookings.length} bookings are on ${escapeHtml(member.card_label)}, that's what lets
-          TripShield map the dependencies and price a disruption against the whole journey, not one booking.
+          Soft Landing maps the dependencies and prices a disruption against the whole journey, not one booking.
         </p>
         <div class="disruption-cta" style="margin-top:24px">
           <p class="subdued">Check this trip for disruption.</p>

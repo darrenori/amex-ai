@@ -11,7 +11,7 @@
 import { closeModal, openModal } from '../components/modal.js';
 import { icons } from '../icons.js';
 
-const SEEN_KEY = 'tripshield.tour.v1';
+const SEEN_KEY = 'soft-landing.tour.v1';
 
 const STEPS = [
   {

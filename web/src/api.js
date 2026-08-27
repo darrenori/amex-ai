@@ -41,7 +41,7 @@ async function request(path, { method = 'GET', body } = {}) {
       body: body ? JSON.stringify(body) : undefined,
     });
   } catch (cause) {
-    throw new ApiError('The TripShield service is unreachable. Check that the API is running.', 0);
+    throw new ApiError('The Soft Landing service is unreachable. Check that the API is running.', 0);
   }
 
   const payload = await response.json().catch(() => null);

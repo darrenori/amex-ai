@@ -29,7 +29,7 @@ function updateLabel(mode) {
 
 function updateNote(mode) {
   if (mode === 'live') {
-    return 'TripShield checked the latest available travel update for every upcoming flight.';
+    return 'Soft Landing checked the latest available travel update for every upcoming flight.';
   }
   if (mode === 'sandbox') {
     return 'This demonstration is using safe test travel updates. No booking was changed.';
@@ -61,7 +61,7 @@ export function detectMarkup(detection) {
     <div class="section-head">
       <h3><span class="section-index">1.</span> Detection</h3>
       <p>
-        TripShield watches your flights and caught this one early, before you'd have to
+        Soft Landing watches your flights and caught this one early, before you'd have to
         call a single provider.
       </p>
     </div>
