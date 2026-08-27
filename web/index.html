@@ -6,7 +6,7 @@
   <meta name="theme-color" content="#00175A">
   <meta name="description" content="Soft Landing, whole-trip disruption recovery for American Express Card Members. An independent AMEX AI Hackathon 2026 concept.">
   <title>Soft Landing · AMEX Travel</title>
-  <link rel="icon" type="image/svg+xml" href="/soft-landing-logo.svg">
+  <link rel="icon" type="image/png" href="/soft-landing-logo.png">
 </head>
 <body>
   <a class="skip-link" href="#main">Skip to main content</a>
@@ -18,69 +18,86 @@
       <header class="home-nav on-navy">
         <div class="wrap home-nav-inner">
           <a class="brand" href="#" aria-label="Soft Landing home">
-            <img class="brand-logo" src="/soft-landing-logo.svg" alt="Soft Landing">
+            <img class="brand-logo" src="/soft-landing-logo.png" alt="Soft Landing">
           </a>
           <div class="home-nav-actions">
-            <a class="github-link" href="https://github.com/darrenori/amex-ai" target="_blank" rel="noreferrer">GitHub <span aria-hidden="true">↗</span></a>
-            <button class="btn btn-on-navy" type="button" data-enter-app>Open the demo</button>
+            <a class="github-link" href="https://github.com/darrenori/amex-ai" target="_blank" rel="noreferrer">
+              <img src="/github-invertocat.svg" alt="" aria-hidden="true">
+              <span>GitHub</span>
+            </a>
+            <button class="btn btn-primary home-demo-button" type="button" data-enter-app>Open the demo</button>
           </div>
         </div>
       </header>
 
-      <div class="home-hero on-navy">
-        <div class="wrap home-hero-grid">
-          <div class="home-copy">
-            <p class="eyebrow" data-animate>For Card Members</p>
-            <h1 id="homeHeading" data-animate>When one booking breaks, the trip shouldn't.</h1>
-            <p class="home-lede" data-animate>
-              Soft Landing watches your whole itinerary, flights, hotels, cars, and rebuilds it around
-              a disruption in minutes, priced against the entire journey.
-            </p>
-            <div class="home-cta" data-animate>
-              <button class="btn btn-primary" type="button" data-enter-app>Open the demo</button>
+      <main class="home-hero">
+        <div class="wrap home-hero-inner">
+          <div class="home-editorial-head">
+            <div class="home-copy">
+              <p class="eyebrow" data-animate>Whole-trip recovery for Card Members</p>
+              <h1 id="homeHeading" data-animate>Travel disruption, handled as one journey.</h1>
             </div>
-            <p class="concept-badge" style="margin-top:24px" data-animate>Hackathon concept · not a live Amex service</p>
+            <div class="home-intro" data-animate>
+              <p class="home-lede">
+                Soft Landing connects every flight, stay, meal, activity and transfer, then rebuilds
+                the journey around a disruption before one broken booking becomes six.
+              </p>
+              <div class="home-cta">
+                <button class="btn btn-primary" type="button" data-enter-app>Explore the recovery</button>
+                <span>Tokyo journey · 6 connected bookings</span>
+              </div>
+            </div>
           </div>
 
-          <!-- kokonutui-style live status card -->
-          <div class="glow-card" data-animate>
-            <div class="glow-card-sheen" aria-hidden="true"></div>
-            <div class="glow-card-head">
-              <span class="live-dot" aria-hidden="true"></span>
-              <span>Live recovery</span>
-              <span class="glow-card-tag">SQ638</span>
-            </div>
-            <p class="glow-card-title">Tokyo flight cancelled, 6 bookings at risk</p>
-            <ul class="glow-steps">
-              <li class="is-done"><span aria-hidden="true">✓</span>Replacement flight found</li>
-              <li class="is-done"><span aria-hidden="true">✓</span>Hotel night protected</li>
-              <li class="is-active"><span aria-hidden="true">•</span>Rebuilding onward journey</li>
-            </ul>
-            <div class="glow-bar"><span></span></div>
-            <p class="glow-card-foot">Whole-trip impact priced in real time</p>
-          </div>
-        </div>
-      </div>
+          <figure class="home-visual" data-animate data-parallax-root>
+            <img
+              class="home-visual-image"
+              src="/skypark-observation-deck.avif"
+              alt="Marina Bay Sands SkyPark above Singapore"
+              fetchpriority="high"
+              data-parallax-image
+            >
+            <div class="home-visual-label">Singapore → Tokyo <span>·</span> September journey</div>
+            <figcaption class="journey-note">
+              <span class="journey-note-time">Detected 08:42 SGT</span>
+              <strong>SQ638 cancelled</strong>
+              <p>Six connected bookings checked together. Recovery options are ready to review.</p>
+            </figcaption>
+            <span class="journey-state"><span aria-hidden="true"></span>Recovery in progress</span>
+          </figure>
 
-      <div class="home-features">
-        <div class="wrap home-feature-grid">
-          <div class="feature-card" data-animate>
-            <span class="icon-badge" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><circle cx="6" cy="6" r="2.4"/><circle cx="18" cy="12" r="2.4"/><circle cx="6" cy="18" r="2.4"/><path d="M8.1 7.2 15.9 11M8.1 16.8 15.9 13.2"/></svg></span>
-            <h3>Whole-trip view</h3>
-            <p>Every booking on one Card, so the dependencies between them are known, not guessed.</p>
-          </div>
-          <div class="feature-card" data-animate>
-            <span class="icon-badge" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3.5 2"/></svg></span>
-            <h3>Priced in minutes</h3>
-            <p>What the cancellation actually costs across the journey, refunds, forfeits and all.</p>
-          </div>
-          <div class="feature-card" data-animate>
-            <span class="icon-badge" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M12 3l7 3v6c0 4.4-3 7.7-7 9-4-1.3-7-4.6-7-9V6z"/><path d="m9 12 2 2 4-4"/></svg></span>
-            <h3>You decide</h3>
-            <p>Ranked plans you can adjust by hand. Nothing is charged until you approve each step.</p>
+          <div class="home-concept-line" data-reveal>
+            <p class="concept-badge">Hackathon concept · not a live Amex service</p>
+            <p>Designed around the journey, not the transaction.</p>
           </div>
         </div>
-      </div>
+      </main>
+
+      <section class="home-method" aria-labelledby="methodHeading">
+        <div class="wrap">
+          <div class="home-method-head" data-reveal>
+            <p class="eyebrow">One disruption. One coordinated answer.</p>
+            <h2 id="methodHeading">A calmer way through the unexpected.</h2>
+          </div>
+          <ol class="home-feature-grid">
+            <li class="feature-card" data-reveal>
+              <span>01</span>
+              <h3>See the whole trip</h3>
+              <p>Every booking on one Card is connected, so the true impact is visible immediately.</p>
+            </li>
+            <li class="feature-card" data-reveal>
+              <span>02</span>
+              <h3>Compare complete recoveries</h3>
+              <p>Flights, hotels and onward plans are priced together instead of repaired in isolation.</p>
+            </li>
+            <li class="feature-card" data-reveal>
+              <span>03</span>
+              <h3>Stay in control</h3>
+              <p>Adjust the plan and approve each step. Nothing changes before you decide.</p>
+            </li>
+          </ol>
+        </div>
+      </section>
     </section>
 
     <!-- ============ Application ============ -->
@@ -88,7 +105,7 @@
       <header class="appbar">
         <div class="wrap appbar-inner">
           <a class="brand" href="#" id="homeLink" aria-label="Soft Landing home">
-            <img class="brand-logo" src="/soft-landing-logo.svg" alt="Soft Landing">
+            <img class="brand-logo" src="/soft-landing-logo.png" alt="Soft Landing">
           </a>
           <div class="appbar-actions">
             <span class="chip chip-neutral" id="memberChip" hidden></span>
